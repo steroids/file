@@ -1,0 +1,15 @@
+{
+    "name": "steroids/file",
+    "description": "",
+    "license": "MIT",
+    "require": {
+        "php": ">=7.4",
+        "ext-mbstring": "*",
+        "ext-curl": "*",
+        "lib-pcre": "*",
+        "steroids/core": "*"
+    },
+    "autoload": {
+        "psr-4": {"steroids\\file\\": ""}
+    }
+}
