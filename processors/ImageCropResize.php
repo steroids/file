@@ -2,23 +2,8 @@
 
 namespace steroids\file\processors;
 
-class ImageCropResize extends BaseFileProcessor
+class ImageCropResize extends FilePreview
 {
-    /**
-     * @var int
-     */
-    public $width;
-
-    /**
-     * @var int
-     */
-    public $height;
-
-    /**
-     * @var int
-     */
-    public $thumbQuality = 90;
-
     protected function runInternal()
     {
         list($originalWidth, $originalHeight) = getimagesize($this->filePath);
@@ -38,7 +23,7 @@ class ImageCropResize extends BaseFileProcessor
             'filePath' => $this->filePath,
             'width' => $cropWidth,
             'height' => $cropHeight,
-            'thumbQuality' => $this->thumbQuality,
+            'previewQuality' => $this->previewQuality,
             'offsetX' => round(($originalWidth - $cropWidth) / 2),
             'offsetY' => round(($originalHeight - $cropHeight) / 2),
         ]);
@@ -49,7 +34,7 @@ class ImageCropResize extends BaseFileProcessor
             'filePath' => $this->filePath,
             'width' => $this->width,
             'height' => $this->height,
-            'thumbQuality' => $this->thumbQuality,
+            'previewQuality' => $this->previewQuality,
         ]);
         $fitProcessor->run();
         $this->width = $fitProcessor->width;

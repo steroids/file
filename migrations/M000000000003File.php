@@ -1,6 +1,6 @@
 <?php
 
-namespace steroids\migrations;
+namespace steroids\file\migrations;
 
 use steroids\core\base\Migration;
 
@@ -21,7 +21,7 @@ class M000000000003File extends Migration
             'createTime' => $this->dateTime(),
             'updateTime' => $this->dateTime(),
             'isTemp' => $this->boolean(),
-            'sourceType' => $this->string('32'),
+            'storageName' => $this->string('32'),
             'amazoneS3Url' => $this->text(),
             'md5' => $this->string(),
             'userId' => $this->integer(),
@@ -38,14 +38,14 @@ class M000000000003File extends Migration
             'isOriginal' => $this->boolean(),
             'width' => $this->smallInteger(),
             'height' => $this->smallInteger(),
-            'processor' => $this->string(),
+            'preview' => $this->string(),
             'createTime' => $this->dateTime(),
             'updateTime' => $this->dateTime(),
             'amazoneS3Url' => $this->text(),
         ]);
-        $this->createIndex('file_processor', 'files_images_meta', [
+        $this->createIndex('file_preview', 'files_images_meta', [
             'fileId',
-            'processor',
+            'preview',
         ]);
         $this->createIndex('original', 'files_images_meta', [
             'fileId',

@@ -5,10 +5,15 @@ namespace steroids\file\models;
 use steroids\core\base\Model;
 use steroids\core\behaviors\TimestampBehavior;
 use steroids\core\behaviors\UidBehavior;
+use steroids\core\exceptions\ModelSaveException;
 use steroids\file\exceptions\FileException;
 use steroids\file\FileModule;
+use steroids\file\storages\BaseStorage;
 use steroids\file\structure\Photo;
-use yii\helpers\Url;
+use steroids\file\structure\UploaderFile;
+use Throwable;
+use yii\base\Exception as YiiBaseException;
+use yii\base\InvalidConfigException;
 
 /**
  * @property integer $id
@@ -20,7 +25,7 @@ use yii\helpers\Url;
  * @property string $fileSize
  * @property integer $createTime
  * @property boolean $isTemp
- * @property string $sourceType
+ * @property string $storageName
  * @property string $amazoneS3Url
  * @property-read string $path
  * @property-read string $url
@@ -32,11 +37,9 @@ use yii\helpers\Url;
  */
 class File extends Model
 {
-    public $processors = [
-        FileModule::PROCESSOR_NAME_DEFAULT
+    public array $previews = [
+        FileModule::PREVIEW_DEFAULT
     ];
-
-    private $_imageMetas = [];
 
     /**
      * @return string
@@ -47,28 +50,45 @@ class File extends Model
     }
 
     /**
-     * @param static|static[] $file
-     * @param string|string[] $processors
-     * @return array|null
-     * @throws \yii\base\Exception
+     * @var BaseStorage|null
      */
-    public static function asPhotos($file, $processors = null)
+    private ?BaseStorage $storage = null;
+
+    /**
+     * @throws InvalidConfigException
+     * @throws YiiBaseException
+     */
+    public function init()
     {
-        $processors = $processors ?: FileModule::getInstance()->defaultProcessors;
+        $fileModule = FileModule::getInstance();
+        $this->storage = $fileModule->getStorage($fileModule->defaultStorageName);
+
+        parent::init();
+    }
+
+    /**
+     * @param static|static[] $file
+     * @param string|string[] $previews
+     * @return array|null
+     * @throws YiiBaseException
+     */
+    public static function asPhotos($file, $previews = null)
+    {
+        $previews = $previews ?: FileModule::getInstance()->previews;
 
         if (is_array($file)) {
-            return array_map(function ($model) use ($processors) {
-                return static::asPhotos($model, $processors);
+            return array_map(function ($model) use ($previews) {
+                return static::asPhotos($model, $previews);
             }, $file);
         } elseif ($file) {
             $result = [];
-            foreach ((array)$processors as $processor) {
+            foreach ((array)$previews as $previewName) {
                 try {
-                    $imageMeta = $file->getImageMeta($processor);
+                    $imageMeta = $file->getImagePreview($previewName);
                 } catch (FileException $e) {
                     return null;
                 }
-                $result[$processor] = new Photo($imageMeta->toFrontend([
+                $result[$previewName] = new Photo($imageMeta->toFrontend([
                     'url',
                     'width',
                     'height',
@@ -94,18 +114,18 @@ class File extends Model
 
     /**
      * @param File[]|File $models
-     * @param string[] $processors
+     * @param string[] $previews
      * @return File[]|File
      */
-    public static function prepareProcessors($models, $processors)
+    public static function prepareProcessors($models, $previews)
     {
         if (is_array($models)) {
-            $models = array_map(function ($model) use ($processors) {
-                $model->processors = $processors;
+            $models = array_map(function ($model) use ($previews) {
+                $model->previews = $previews;
                 return $model;
             }, $models);
         } elseif ($models instanceof File) {
-            $models->processors = $processors;
+            $models->previews = $previews;
         }
         return $models;
     }
@@ -171,30 +191,25 @@ class File extends Model
     /**
      * @return string
      */
-    public function getRelativePath()
-    {
-        return ltrim($this->folder, '/') . $this->fileName;
-    }
-
-    /**
-     * @return string
-     * @throws \yii\base\Exception
-     */
     public function getPath()
     {
-        return FileModule::getInstance()->filesRootPath . $this->getRelativePath();
+        return $this->storage->resolvePath($this);
     }
 
     /**
      * @return string
-     * @throws \yii\base\Exception
+     */
+    public function getRelativePath()
+    {
+        return $this->storage->resolveRelativePath($this);
+    }
+
+    /**
+     * @return string
      */
     public function getUrl()
     {
-        if ($this->sourceType === FileModule::SOURCE_AMAZONE_S3) {
-            return $this->amazoneS3Url;
-        }
-        return FileModule::getInstance()->filesRootUrl . $this->getRelativePath();
+        return $this->storage->resolveUrl($this);
     }
 
     public function getDownloadName()
@@ -205,14 +220,10 @@ class File extends Model
 
     /**
      * @return string
-     * @throws \yii\base\Exception
      */
     public function getDownloadUrl()
     {
-        if ($this->sourceType === FileModule::SOURCE_AMAZONE_S3) {
-            return $this->amazoneS3Url;
-        }
-        return Url::to(['/file/download/index', 'uid' => $this->uid, 'name' => $this->getDownloadName()], true);
+        return $this->storage->resolveDownloadUrl($this);
     }
 
     /*public function getIconName()
@@ -224,55 +235,46 @@ class File extends Model
         return file_exists($iconPath) ? $ext : 'default';
     }*/
 
+    /**
+     * @return bool
+     * @throws Throwable
+     */
     public function beforeDelete()
     {
         if (!parent::beforeDelete()) {
             return false;
         }
 
-        // Remove image meta info
-        /** @var FileImage[] $imagesMeta */
-        $imagesMeta = FileImage::findAll(['fileId' => $this->id]);
-        foreach ($imagesMeta as $imageMeta) {
-            if (!$imageMeta->delete()) {
-                throw new FileException('Can not remove image meta `' . $imageMeta->getRelativePath() . '` for file `' . $this->id . '`.');
-            }
-        }
-
-        // Delete file
-        if (file_exists($this->getPath()) && !unlink($this->getPath())) {
-            throw new FileException('Can not remove file file `' . $this->getRelativePath() . '`.');
-        }
-
-        // Check to delete empty folders
-        $filesRootPath = FileModule::getInstance()->filesRootPath;
-        $folderNames = explode('/', trim($this->folder, '/'));
-        foreach ($folderNames as $i => $folderName) {
-            $folderPath = implode('/', array_slice($folderNames, 0, count($folderNames) - $i)) . '/';
-            $folderAbsolutePath = $filesRootPath . $folderPath;
-
-            // Check dir exists
-            if (!file_exists($folderAbsolutePath)) {
-                continue;
-            }
-
-            // Skip, if dir is not empty
-            $handle = opendir($folderAbsolutePath);
-            while (false !== ($entry = readdir($handle))) {
-                if ($entry != "." && $entry != "..") {
-                    break 2;
-                }
-            }
-
-            // Remove folder
-            if (!rmdir($folderAbsolutePath)) {
-                throw new FileException('Can not remove empty folder `' . $folderPath . '`.');
-            }
-        }
-
-        return true;
+        return $this->storage->delete($this);
     }
 
+    /**
+     * If $uploaderFile established
+     * then field $source will be used
+     * for getting path/stream file
+     *
+     * @param string $previewName
+     * @param UploaderFile|null $uploaderFile
+     * @return FileImage
+     * @throws FileException
+     * @throws YiiBaseException
+     */
+    public function getImagePreview($previewName = FileModule::PREVIEW_DEFAULT, $uploaderFile = null)
+    {
+        if (!isset($this->previews[$previewName])) {
+            $this->previews[$previewName] = FileImage::findByPreviewName($this->id, $previewName, $uploaderFile);
+        }
+        return $this->previews[$previewName];
+    }
+
+    /**
+     * @param bool $insert
+     * @param array $changedAttributes
+     * @throws FileException
+     * @throws YiiBaseException
+     * @throws ModelSaveException
+     * @throws InvalidConfigException
+     */
     public function afterSave($insert, $changedAttributes)
     {
         // Create ImageMeta for images
@@ -285,11 +287,11 @@ class File extends Model
                 'fileName' => $this->fileName,
                 'fileMimeType' => $this->fileMimeType,
                 'isOriginal' => true,
-                'processor' => FileModule::PROCESSOR_NAME_ORIGINAL,
+                'preview' => FileModule::PREVIEW_ORIGINAL,
             ]);
 
             // Save
-            $imageMeta->process(FileModule::PROCESSOR_NAME_ORIGINAL);
+            $imageMeta->preview(FileModule::PREVIEW_ORIGINAL);
             $imageMeta->saveOrPanic();
         }
 
@@ -297,30 +299,23 @@ class File extends Model
     }
 
     /**
-     * @param string $processor
-     * @return FileImage
+     * @return array
+     * @throws FileException
+     * @throws YiiBaseException
      */
-    public function getImageMeta($processor = FileModule::PROCESSOR_NAME_DEFAULT)
-    {
-        if (!isset($this->_imageMetas[$processor])) {
-            $this->_imageMetas[$processor] = FileImage::findByProcessor($this->id, $processor);
-        }
-        return $this->_imageMetas[$processor];
-    }
-
     public function getImages()
     {
         $images = [];
         if ($this->isImage()) {
-            foreach ($this->processors as $processor) {
-                $images[$processor] = $this->getImageMeta($processor);
+            foreach ($this->previews as $previewName) {
+                $images[$previewName] = $this->getImagePreview($previewName);
             }
-        } elseif (in_array(FileModule::PROCESSOR_NAME_DEFAULT, $this->processors)) {
+        } elseif (in_array(FileModule::PREVIEW_DEFAULT, $this->previews)) {
             $iconsPath = FileModule::getInstance()->iconsRootPath;
             $iconsUrl = FileModule::getInstance()->iconsRootUrl;
             if ($iconsPath && $iconsUrl) {
                 $iconName = pathinfo($this->fileName, PATHINFO_EXTENSION) . '.png';
-                $images[FileModule::PROCESSOR_NAME_DEFAULT] = [
+                $images[FileModule::PREVIEW_DEFAULT] = [
                     'url' => file_exists($iconsPath . '/' . $iconName)
                         ? $iconsUrl . '/' . $iconName
                         : $iconsUrl . '/txt.png',
@@ -332,10 +327,10 @@ class File extends Model
         return $images;
     }
 
-    public function getExtendedAttributes($processor = null)
+    public function getExtendedAttributes($preview = null)
     {
-        if (!empty($processor)) {
-            $this->processors = (array)$processor;
+        if (!empty($preview)) {
+            $this->previews = (array)$preview;
         }
         return $this->toArray();
     }
@@ -345,6 +340,8 @@ class File extends Model
      *
      * @param array(integer, integer) $fixedSize
      * @return bool
+     * @throws FileException
+     * @throws YiiBaseException
      */
     public function checkImageFixedSize($fixedSize)
     {
@@ -352,7 +349,7 @@ class File extends Model
             return true;
         }
 
-        $originalImageMeta = $this->getImageMeta(FileModule::PROCESSOR_NAME_ORIGINAL);
+        $originalImageMeta = $this->getImagePreview(FileModule::PREVIEW_ORIGINAL);
         $originalImageMeta->checkFixedSize((int)$fixedSize[0], (int)$fixedSize[1]);
 
         if ($originalImageMeta->hasErrors()) {

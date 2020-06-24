@@ -2,6 +2,7 @@
 
 namespace steroids\file\models;
 
+use Exception;
 use steroids\core\base\Model;
 use steroids\core\behaviors\TimestampBehavior;
 use steroids\file\processors\ImageCrop;
@@ -9,6 +10,11 @@ use steroids\file\processors\ImageCropResize;
 use steroids\file\processors\ImageResize;
 use steroids\file\exceptions\FileException;
 use steroids\file\FileModule;
+use steroids\file\storages\BaseStorage;
+use steroids\file\structure\UploaderFile;
+use Yii;
+use yii\base\Exception as YiiBaseException;
+use yii\base\InvalidConfigException;
 
 /**
  * @property integer $id
@@ -19,7 +25,7 @@ use steroids\file\FileModule;
  * @property boolean $isOriginal
  * @property integer $width
  * @property integer $height
- * @property string $processor
+ * @property string $preview
  * @property integer $createTime
  * @property string $amazoneS3Url
  * @property-read string $path
@@ -27,6 +33,24 @@ use steroids\file\FileModule;
  */
 class FileImage extends Model
 {
+    /**
+     * @var BaseStorage
+     */
+    private ?BaseStorage $storage = null;
+
+    /**
+     * @throws InvalidConfigException
+     * @throws YiiBaseException
+     */
+    public function init()
+    {
+        $fileModule = FileModule::getInstance();
+        $this->storage = $fileModule->getStorage($fileModule->defaultStorageName);
+
+        parent::init();
+    }
+
+
     public static function isImageMimeType($value)
     {
         return in_array($value, [
@@ -70,34 +94,29 @@ class FileImage extends Model
      */
     public function getRelativePath()
     {
-        return ltrim($this->folder, '/') . $this->fileName;
+        return $this->storage->resolveRelativePath($this);
     }
 
     /**
      * @return string
-     * @throws \yii\base\Exception
      */
     public function getPath()
     {
-        return FileModule::getInstance()->filesRootPath . $this->getRelativePath();
+        return $this->storage->resolvePath($this);
     }
 
     /**
      * @return string
-     * @throws \yii\base\Exception
      */
     public function getUrl()
     {
-        if ($this->amazoneS3Url) {
-            return $this->amazoneS3Url;
-        }
-
-        return FileModule::getInstance()->filesRootUrl . $this->getRelativePath();
+        return $this->storage->resolvePath($this);
     }
 
     /**
      * @return bool
      * @throws FileException
+     * @throws YiiBaseException
      */
     public function beforeDelete()
     {
@@ -114,7 +133,7 @@ class FileImage extends Model
     }
 
     /**
-     * @param $fileId
+     * @param string|int $fileId
      * @return static
      */
     public static function findOriginal($fileId)
@@ -126,94 +145,136 @@ class FileImage extends Model
     }
 
     /**
-     * @param $fileId
-     * @param string [$processorName]
+     * If $uploaderFile established
+     * then field $source will be used
+     * for getting path/stream file
+     *
+     * @param string|int $fileId
+     * @param string|array $previewName
+     * @param UploaderFile|null $uploaderFile
      * @return FileImage
      * @throws FileException
-     * @throws \yii\base\Exception
+     * @throws YiiBaseException
+     * @throws Exception
      */
-    public static function findByProcessor($fileId, $processorName = FileModule::PROCESSOR_NAME_DEFAULT)
+    public static function findByPreviewName($fileId, $previewName = FileModule::PREVIEW_DEFAULT, $uploaderFile = null)
     {
         // Check already exists
-        /** @var static $imageMeta */
-        $imageMeta = static::findOne([
+        /** @var FileImage $previewImage */
+        $previewImage = FileImage::findOne([
             'fileId' => $fileId,
-            'processor' => $processorName,
+            'preview' => $previewName,
         ]);
-        if ($imageMeta) {
-            return $imageMeta;
+
+        if ($previewImage) {
+            return $previewImage;
         }
 
-        $imageMeta = static::cloneOriginal($fileId, $processorName);
-        $imageMeta->process($processorName);
-        $imageMeta->processor = $processorName;
-        $imageMeta->save();
+        $previewImage = static::createPreviewImage($fileId, $previewName, $uploaderFile);
+        $previewImage->preview = $previewName;
+        $previewImage->preview($previewName, $uploaderFile);
+        $previewImage->save();
 
-        return $imageMeta;
+        return $previewImage;
     }
 
     /**
-     * @param string|array $params
+     * @param string $fileId
+     * @param string $previewName
+     * @param UploaderFile $uploaderFile
+     * @return static
+     * @throws Exception
      * @throws FileException
-     * @throws \yii\base\Exception
-     * @throws \yii\base\InvalidConfigException
      */
-    public function process($params)
-    {
-        if (!$this->isNewRecord) {
-            // Clone from original file
-            $originalMeta = static::findOriginal($this->fileId);
-            if (!unlink($this->getPath()) || !copy($originalMeta->getPath(), $this->getPath())) {
-                throw new FileException('Can not re-create image meta file from original `' . $originalMeta->getRelativePath() . '` to `' . $imageMeta->getRelativePath() . '`.');
-            }
-        }
-
-        if (is_string($params)) {
-            $processors = FileModule::getInstance()->processors;
-            if (!isset($processors[$params])) {
-                throw new FileException('Not found processor by name `' . $params . '`');
-            }
-            $params = $processors[$params];
-        }
-
-        /** @var ImageCrop|ImageCropResize|ImageResize $processor */
-        $processor = \Yii::createObject($params);
-        $processor->filePath = $this->getPath();
-        $processor->thumbQuality = FileModule::getInstance()->thumbQuality;
-        $processor->run();
-
-        if (isset($params['width']) && isset($params['height'])) {
-            $this->width = $processor->width;
-            $this->height = $processor->height;
-        }
-    }
-
-    protected static function cloneOriginal($fileId, $suffix)
+    protected static function createPreviewImage($fileId, $previewName, $uploaderFile = null)
     {
         // Get original image
-        /** @var static $originalMeta */
-        $originalMeta = static::findOriginal($fileId);
-        if (!$originalMeta) {
+        $originalImage = static::findOriginal($fileId);
+        if (!$originalImage) {
             throw new FileException('Not found original image by id `' . $fileId . '`.');
         }
 
         // New file meta
-        $imageMeta = new static();
-        $imageMeta->fileId = $originalMeta->fileId;
-        $imageMeta->folder = $originalMeta->folder;
-        $imageMeta->fileMimeType = $originalMeta->fileMimeType;
+        $previewImage = new static();
+        $previewImage->fileId = $originalImage->fileId;
+        $previewImage->folder = $originalImage->folder;
+        $previewImage->fileMimeType = $originalImage->fileMimeType;
 
         // Generate new file name
-        $extension = pathinfo($originalMeta->fileName, PATHINFO_EXTENSION);
-        $thumbFormat = $extension && $extension === 'png' ? 'png' : FileModule::getInstance()->thumbFormat;
-        $imageMeta->fileName = pathinfo($originalMeta->fileName, PATHINFO_FILENAME) . '.' . $suffix . '.' . $thumbFormat;
+        $extension = pathinfo($originalImage->fileName, PATHINFO_EXTENSION);
+        $previewExtension = $extension && $extension === 'png' ? 'png' : FileModule::getInstance()->previewExtension;
+        $previewImage->fileName = pathinfo($originalImage->fileName, PATHINFO_FILENAME)
+            . '.' . $previewName
+            . '.' . $previewExtension;
 
-        // Clone original file
-        if (!copy($originalMeta->getPath(), $imageMeta->getPath())) {
-            throw new FileException('Can not clone original file `' . $originalMeta->getRelativePath() . '` to `' . $imageMeta->getRelativePath() . '`.');
+        $destPath = $previewImage->getPath();
+        if ($uploaderFile && $uploaderFile->source) {
+            $imageRaw = static::getRawData($uploaderFile->source);
+        } else {
+            $imageRaw = file_get_contents($originalImage->getPath());
         }
 
-        return $imageMeta;
+        // Create new file
+        if (!file_put_contents($destPath, $imageRaw)) {
+            throw new FileException('Can not clone original file `'
+                . '` to `' . $destPath . '`.'
+            );
+        }
+
+        return $previewImage;
+    }
+
+    /**
+     * If $uploaderFile established
+     * then field $source will be used
+     * for getting path/stream file
+     *
+     * @param string|array $previewConfig
+     * @param UploaderFile|null $uploaderFile
+     * @throws FileException
+     * @throws Exception
+     * @throws InvalidConfigException
+     */
+    public function preview($previewConfig = '', $uploaderFile = null)
+    {
+        if (!$this->isNewRecord) {
+
+            // Clone from original file
+            $originalMeta = static::findOriginal($this->fileId);
+
+            $destPath = $this->getPath();
+            if ($uploaderFile && $uploaderFile->source) {
+                $imageRaw = static::getRawData($uploaderFile->source);
+            } else {
+                $imageRaw = file_get_contents($originalMeta->getPath());
+            }
+
+            if (!unlink($this->getPath()) || !file_put_contents($destPath, $imageRaw)) {
+                throw new FileException('Can not re-create image meta file from original `'
+                    . '` to `' . $destPath . '`.'
+                );
+            }
+        }
+
+        if (is_string($previewConfig)) {
+            $previews = FileModule::getInstance()->previews;
+            if (!isset($previews[$previewConfig])) {
+                throw new FileException('Not found preview by name `' . $previewConfig . '`');
+            }
+            $previewConfig = $previews[$previewConfig];
+        }
+
+        /** @var ImageCrop|ImageCropResize|ImageResize $preview */
+        $preview = Yii::createObject($previewConfig);
+        $preview->filePath = $this->storage->resolvePath($this);
+
+        $preview->previewQuality = (int)FileModule::getInstance()->previewQuality;
+        $preview->run();
+
+        if (isset($previewConfig['width']) && isset($previewConfig['height'])) {
+            $this->width = $preview->width;
+            $this->height = $preview->height;
+        }
     }
 
     /**
@@ -223,16 +284,35 @@ class FileImage extends Model
     public function checkFixedSize($width, $height)
     {
         if (!$width || !$height) {
-            $this->addError('id', \Yii::t('steroids', 'Fixed height or width must be greater than 0'));
+            $this->addError('id',
+                Yii::t('steroids', 'Fixed height or width must be greater than 0')
+            );
             return;
         }
 
         if ($this->width < $width && $this->height < $height) {
-            $this->addError('id', \Yii::t('steroids', 'Image is smaller that the given fixed size'));
+            $this->addError('id',
+                Yii::t('steroids', 'Image is smaller that the given fixed size')
+            );
         }
 
-        if ((int) floor($this->width/$this->height) !== (int) floor($width/$height)) {
-            $this->addError('id', \Yii::t('steroids', 'Image has different height/width ratio than the given size'));
+        if ((int)floor($this->width / $this->height) !== (int)floor($width / $height)) {
+            $this->addError('id',
+                Yii::t('steroids', 'Image has different height/width ratio than the given size')
+            );
+        }
+    }
+
+    /**
+     * @param resource|string $source
+     * @return string
+     */
+    private static function getRawData($source)
+    {
+        if (is_resource($source)) {
+            return stream_get_contents($source);
+        } else {
+            return file_get_contents($source);
         }
     }
 

@@ -2,17 +2,20 @@
 
 namespace steroids\file;
 
+use Exception;
 use Yii;
 use steroids\file\exceptions\FileUserException;
-use steroids\file\uploaders\AwsStorage;
-use steroids\file\uploaders\FileStorage;
+use steroids\file\storages\AwsStorage;
+use steroids\file\storages\FileStorage;
 use steroids\core\base\Module;
 use steroids\file\models\File;
 use steroids\file\structure\UploaderFile;
-use steroids\file\uploaders\BaseStorage;
+use steroids\file\storages\BaseStorage;
 use steroids\file\uploaders\BaseUploader;
 use steroids\file\uploaders\PostUploader;
 use steroids\file\uploaders\PutUploader;
+use yii\base\Exception as YiiBaseException;
+use yii\base\InvalidConfigException;
 use yii\helpers\ArrayHelper;
 use yii\helpers\FileHelper;
 
@@ -29,7 +32,7 @@ class FileModule extends Module
     const PREVIEW_THUMBNAIL = 'thumbnail';
     const PREVIEW_FULLSCREEN = 'fullscreen';
 
-    public string $defaultStorage = self::STORAGE_FILE;
+    public string $defaultStorageName = self::STORAGE_FILE;
 
     /**
      * @var array
@@ -108,13 +111,13 @@ class FileModule extends Module
      * Absolute url to file icons directory (if exists)
      * @var string
      */
-    public string $iconsRootUrl;
+    public string $iconsRootUrl = '';
 
     /**
      * Absolute path to file icons directory (if exists)
      * @var string
      */
-    public string $iconsRootPath;
+    public string $iconsRootPath = '';
 
     /**
      * @inheritDoc
@@ -126,10 +129,10 @@ class FileModule extends Module
         $this->previews = ArrayHelper::merge($this->defaultPreviews(), $this->previews);
 
         if ($this->iconsRootUrl) {
-            $this->iconsRootUrl = \Yii::getAlias($this->iconsRootUrl);
+            $this->iconsRootUrl = Yii::getAlias($this->iconsRootUrl);
         }
         if ($this->iconsRootPath) {
-            $this->iconsRootPath = \Yii::getAlias($this->iconsRootPath);
+            $this->iconsRootPath = Yii::getAlias($this->iconsRootPath);
         }
 
         $this->fileMaxSize = min(
@@ -144,7 +147,7 @@ class FileModule extends Module
      * @param string $uploaderName
      * @param string $storageName
      * @return File[]
-     * @throws \yii\base\InvalidConfigException
+     * @throws InvalidConfigException
      */
     public function uploadFromRequest($folder = null, $uploaderName = null, $storageName = null)
     {
@@ -161,10 +164,10 @@ class FileModule extends Module
     /**
      * @param UploaderFile|string|resource $uploaderFile
      * @param string $folder
-     * @param null $storageName
+     * @param string|null $storageName
      * @return File
-     * @throws \steroids\core\exceptions\ModelSaveException
-     * @throws \yii\base\Exception
+     * @throws YiiBaseException
+     * @throws Exception
      */
     public function uploadFromFile($uploaderFile, $folder = null, $storageName = null)
     {
@@ -186,13 +189,15 @@ class FileModule extends Module
             'fileName' => $uploaderFile->savedFileName,
             'fileMimeType' => $uploaderFile->mimeType,
             'fileSize' => $uploaderFile->size,
-            'sourceType' => $storageName,
+            'storageName' => $storageName,
             'userId' => Yii::$app->has('user') ? Yii::$app->user->getId() : null,
         ]);
 
         // Save to storage
-        $storage = $this->getStorage($storageName ?: $this->defaultStorage);
-        $file->attributes = $storage->write($uploaderFile, $folder);
+        $storage = $this->getStorage($storageName ?: $this->defaultStorageName);
+        $storageResult = $storage->write($uploaderFile, $folder);
+
+        $file->attributes = $storageResult->getAttributes();
 
         // Save model
         if (!$file->save()) {
@@ -246,8 +251,7 @@ class FileModule extends Module
         // Create image previews
         if (!$this->previewLazyCreate && $file->isImage()) {
             foreach (array_keys($this->previews) as $previewName) {
-                // TODO create preview
-                //$file->getImageMeta($previewName);
+                $file->getImagePreview($previewName, $uploaderFile);
             }
         }
 
@@ -257,7 +261,7 @@ class FileModule extends Module
     /**
      * @param string $name
      * @return BaseStorage|null
-     * @throws \yii\base\InvalidConfigException
+     * @throws InvalidConfigException
      */
     public function getStorage($name)
     {
@@ -265,8 +269,8 @@ class FileModule extends Module
             return null;
         }
         if (is_array($this->storages[$name])) {
-            $this->storages[$name] = \Yii::createObject(array_merge(
-                ['className' => ArrayHelper::getValue($this->storagesClasses, $name)],
+            $this->storages[$name] = Yii::createObject(array_merge(
+                ['class' => ArrayHelper::getValue($this->storagesClasses, $name)],
                 $this->storages[$name],
                 ['name' => $name]
             ));
@@ -277,7 +281,7 @@ class FileModule extends Module
     /**
      * @param string $name
      * @return BaseUploader|null
-     * @throws \yii\base\InvalidConfigException
+     * @throws InvalidConfigException
      */
     public function getUploader($name)
     {
@@ -285,8 +289,8 @@ class FileModule extends Module
             return null;
         }
         if (is_array($this->uploaders[$name])) {
-            $this->uploaders[$name] = \Yii::createObject(array_merge(
-                ['className' => ArrayHelper::getValue($this->uploadersClasses, $name)],
+            $this->uploaders[$name] = Yii::createObject(array_merge(
+                ['class' => ArrayHelper::getValue($this->uploadersClasses, $name)],
                 $this->uploaders[$name],
                 ['name' => $name]
             ));

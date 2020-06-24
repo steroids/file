@@ -7,7 +7,11 @@
         "ext-mbstring": "*",
         "ext-curl": "*",
         "lib-pcre": "*",
-        "steroids/core": "*"
+        "steroids/core": "*",
+        "guzzlehttp/guzzle": "^6.5",
+        "frostealth/yii2-aws-s3": "~2.0",
+        "ext-exif": "*",
+        "ext-gd": "*"
     },
     "autoload": {
         "psr-4": {"steroids\\file\\": ""}

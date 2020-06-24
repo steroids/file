@@ -2,14 +2,14 @@
 
 namespace steroids\file\structure;
 
-use yii\base\BaseObject;
+use yii\base\Model;
 
 /**
  * Class StorageResult
  */
-class StorageResult extends BaseObject
+class StorageResult extends Model
 {
-    public string $path;
-    public string $url;
-    public string $md5;
+    public string $path = '';
+    public string $url = '';
+    public string $md5 = '';
 }

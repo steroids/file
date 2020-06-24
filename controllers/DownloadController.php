@@ -4,11 +4,18 @@ namespace steroids\file\controllers;
 
 use steroids\file\FileModule;
 use steroids\file\models\File;
+use Yii;
+use yii\base\Exception;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
 
 class DownloadController extends Controller
 {
+    /**
+     * @param string $uid
+     * @throws NotFoundHttpException
+     * @throws Exception
+     */
     public function actionIndex($uid)
     {
         /** @var File $file */
@@ -18,7 +25,7 @@ class DownloadController extends Controller
         }
 
         if (FileModule::getInstance()->xHeader !== false) {
-            \Yii::$app->response->xSendFile($file->path, $file->downloadName, [
+            Yii::$app->response->xSendFile($file->path, $file->downloadName, [
                 'xHeader' => FileModule::getInstance()->xHeader,
             ]);
         } else {

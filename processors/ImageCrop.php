@@ -2,18 +2,10 @@
 
 namespace steroids\file\processors;
 
-class ImageCrop extends BaseFileProcessor
+use Exception;
+
+class ImageCrop extends FilePreview
 {
-    /**
-     * @var int
-     */
-    public $width;
-
-    /**
-     * @var int
-     */
-    public $height;
-
     /**
      * @var int
      */
@@ -23,11 +15,6 @@ class ImageCrop extends BaseFileProcessor
      * @var int
      */
     public $offsetY;
-
-    /**
-     * @var int
-     */
-    public $thumbQuality = 90;
 
     protected function runInternal()
     {
@@ -55,7 +42,7 @@ class ImageCrop extends BaseFileProcessor
         if ($extension === 'jpg' || $extension === 'jpeg') {
             try {
                 $exif = exif_read_data($this->filePath);
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
             };
 
             if (!empty($exif['Orientation'])) {
@@ -85,7 +72,7 @@ class ImageCrop extends BaseFileProcessor
         $bool = $bool && imagecopyresampled($dst, $src, 0, 0, $this->offsetX, $this->offsetY, $this->width, $this->height, $this->width, $this->height);
         $bool && $extension === 'png' ?
             imagepng($dst, $this->filePath) :
-            imagejpeg($dst, $this->filePath, $this->thumbQuality);
+            imagejpeg($dst, $this->filePath, $this->previewQuality);
 
         // Clean
         if ($src) {

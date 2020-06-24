@@ -11,23 +11,8 @@ namespace steroids\file\processors;
  *
  * @package steroids\file\processors
  */
-class ImageFitWithCrop extends BaseFileProcessor
+class ImageFitWithCrop extends FilePreview
 {
-    /**
-     * @var int
-     */
-    public $width;
-
-    /**
-     * @var int
-     */
-    public $height;
-
-    /**
-     * @var int
-     */
-    public $thumbQuality = 90;
-
     protected function getSizesAndScales()
     {
         $imageContent = file_get_contents($this->filePath);
@@ -60,7 +45,7 @@ class ImageFitWithCrop extends BaseFileProcessor
                 'filePath' => $this->filePath,
                 'width' => $this->width,
                 'height' => $this->height,
-                'thumbQuality' => $this->thumbQuality,
+                'previewQuality' => $this->previewQuality,
                 'isFit' => false,
             ]);
             $resizeProcessor->run();
@@ -90,7 +75,7 @@ class ImageFitWithCrop extends BaseFileProcessor
                 'filePath' => $this->filePath,
                 'width' => $cropWidth,
                 'height' => $cropHeight,
-                'thumbQuality' => $this->thumbQuality,
+                'previewQuality' => $this->previewQuality,
                 'offsetX' => $offsetX,
                 'offsetY' => $offsetY,
             ]);

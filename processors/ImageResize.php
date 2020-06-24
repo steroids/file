@@ -2,27 +2,14 @@
 
 namespace steroids\file\processors;
 
-class ImageResize extends BaseFileProcessor
+use Exception;
+
+class ImageResize extends FilePreview
 {
-    /**
-     * @var int
-     */
-    public $width;
-
-    /**
-     * @var int
-     */
-    public $height;
-
     /**
      * @var boolean
      */
-    public $isFit = true;
-
-    /**
-     * @var int
-     */
-    public $thumbQuality = 90;
+    public bool $isFit = true;
 
     protected function runInternal()
     {
@@ -53,7 +40,7 @@ class ImageResize extends BaseFileProcessor
         if ($extension === 'jpg' || $extension === 'jpeg') {
             try {
                 $exif = exif_read_data($this->filePath);
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
             }
 
             if (!empty($exif['Orientation'])) {
@@ -83,7 +70,7 @@ class ImageResize extends BaseFileProcessor
         $bool = $bool && imagecopyresampled($dst, $src, 0, 0, 0, 0, $this->width, $this->height, $originalWidth, $originalHeight);
         $bool && $extension === 'png' ?
             imagepng($dst, $this->filePath) :
-            imagejpeg($dst, $this->filePath, $this->thumbQuality);
+            imagejpeg($dst, $this->filePath, $this->previewQuality);
 
         // Clean
         if ($src) {
