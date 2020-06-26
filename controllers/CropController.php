@@ -6,7 +6,7 @@ use steroids\file\exceptions\FileException;
 use steroids\file\FileModule;
 use steroids\file\models\File;
 use steroids\file\models\FileImage;
-use steroids\file\processors\ImageCrop;
+use steroids\file\previews\ImageCrop;
 use Yii;
 use yii\base\Exception;
 use yii\base\InvalidConfigException;

@@ -14,7 +14,7 @@ use yii\base\InvalidConfigException;
 use yii\helpers\FileHelper;
 use yii\helpers\Url;
 
-class FileStorage extends BaseStorage
+class FileStorage extends Storage
 {
     /**
      * Absolute path to root user files dir
@@ -38,20 +38,36 @@ class FileStorage extends BaseStorage
     }
 
     /**
+     * @param UploaderFile $file
+     * @return resource
+     */
+    public function read(UploaderFile $file)
+    {
+        if (is_resource($file->source)) {
+            return $file->source;
+        }
+        return fopen($file->source, 'r');
+    }
+
+    /**
      * @inheritDoc
      *
      * @throws FileException
      * @throws Exception
      * @throws InvalidConfigException
      */
-    public function write(UploaderFile $file, $fileFolderToSave = null)
+    public function write(UploaderFile $file, $folder = null)
     {
         $relativePath = implode(DIRECTORY_SEPARATOR, array_filter([
-            $fileFolderToSave,
+            $folder,
             $file->savedFileName
         ]));
+        $folderPath = implode(DIRECTORY_SEPARATOR, array_filter([
+            $this->rootPath,
+            $folder
+        ]));
+
         $path = $this->rootPath . DIRECTORY_SEPARATOR . $relativePath;
-        $folderPath = $this->rootPath . DIRECTORY_SEPARATOR . $fileFolderToSave ?? '';
 
         // Create destination directory, if no exists
         if (!is_dir($folderPath)) {
@@ -65,7 +81,7 @@ class FileStorage extends BaseStorage
         // Upload file content
         file_put_contents(
             $path,
-            fopen('php://input', 'r'),
+            stream_get_contents($this->read($file)),
             $file->contentRange && $file->contentRange['start'] > 0 ? FILE_APPEND : 0
         );
 
@@ -109,11 +125,7 @@ class FileStorage extends BaseStorage
      */
     public function resolvePath($file)
     {
-        return implode(DIRECTORY_SEPARATOR, array_filter([
-            $this->rootPath,
-            $file->folder !== DIRECTORY_SEPARATOR ? $file->folder : null,
-            $file->fileName
-        ]));
+        return $this->getFullFileName($file, $this->rootPath);
     }
 
     /**
@@ -122,25 +134,25 @@ class FileStorage extends BaseStorage
      */
     public function resolveUrl($file)
     {
+        return $this->getFullFileName($file, $this->rootUrl);
+    }
+
+    /**
+     * @param File|FileImage $file
+     * @param string|null $root
+     * @return string
+     */
+    protected function getFullFileName($file, $root = null)
+    {
         return implode(DIRECTORY_SEPARATOR, array_filter([
-            $this->rootUrl,
+            $root,
             $file->folder !== DIRECTORY_SEPARATOR ? $file->folder : null,
             $file->fileName
         ]));
     }
 
     /**
-     * @param File|FileImage $file
-     * @return string
-     */
-    public function resolveRelativePath($file)
-    {
-        return ltrim($file->folder, '/') . $file->fileName;
-    }
-
-    /**
      * @param File $file
-     * @return bool
      * @throws Exception
      * @throws FileException
      * @throws Throwable
@@ -150,13 +162,11 @@ class FileStorage extends BaseStorage
         // Remove image meta info
         $imagesMeta = FileImage::findAll(['fileId' => $file->id]);
         foreach ($imagesMeta as $imageMeta) {
-            if (!$imageMeta->delete()) {
-                $relativePath = $this->resolveRelativePath($imageMeta);
-                throw new FileException('Can not remove image meta `'
-                    . $relativePath . '` for file `'
-                    . $file->id . '`.'
-                );
+            $imageMetaPath = $imageMeta->getPath();
+            if (file_exists($imageMetaPath) && !unlink($imageMetaPath)) {
+                throw new FileException('Can not remove image thumb file `' . $imageMetaPath . '`.');
             }
+            $imageMeta->delete();
         }
 
         $filesRootPath = $this->rootPath;
@@ -164,7 +174,7 @@ class FileStorage extends BaseStorage
 
         // Delete file
         if (file_exists($filePath) && !unlink($filePath)) {
-            throw new FileException('Can not remove file file `' . $this->resolveRelativePath($file) . '`.');
+            throw new FileException('Can not remove file file `' . $filePath . '`.');
         }
 
         // Check to delete empty folders
@@ -191,8 +201,6 @@ class FileStorage extends BaseStorage
                 throw new FileException('Can not remove empty folder `' . $folderPath . '`.');
             }
         }
-
-        return true;
     }
 
     /**

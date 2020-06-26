@@ -10,7 +10,7 @@ use steroids\file\storages\FileStorage;
 use steroids\core\base\Module;
 use steroids\file\models\File;
 use steroids\file\structure\UploaderFile;
-use steroids\file\storages\BaseStorage;
+use steroids\file\storages\Storage;
 use steroids\file\uploaders\BaseUploader;
 use steroids\file\uploaders\PostUploader;
 use steroids\file\uploaders\PutUploader;
@@ -176,6 +176,8 @@ class FileModule extends Module
             $uploaderFile = new UploaderFile(['source' => $uploaderFile]);
         }
 
+        $storageName = $storageName ?: $this->defaultStorageName;
+
         // Normalize folder
         if ($folder) {
             $folder = FileHelper::normalizePath($folder);
@@ -187,17 +189,17 @@ class FileModule extends Module
             'title' => $uploaderFile->title,
             'folder' => $folder,
             'fileName' => $uploaderFile->savedFileName,
-            'fileMimeType' => $uploaderFile->mimeType,
             'fileSize' => $uploaderFile->size,
             'storageName' => $storageName,
             'userId' => Yii::$app->has('user') ? Yii::$app->user->getId() : null,
         ]);
 
         // Save to storage
-        $storage = $this->getStorage($storageName ?: $this->defaultStorageName);
+        $storage = $this->getStorage($storageName);
         $storageResult = $storage->write($uploaderFile, $folder);
 
         $file->attributes = $storageResult->getAttributes();
+        $file->fileMimeType = $uploaderFile->mimeType;
 
         // Save model
         if (!$file->save()) {
@@ -260,7 +262,7 @@ class FileModule extends Module
 
     /**
      * @param string $name
-     * @return BaseStorage|null
+     * @return Storage|null
      * @throws InvalidConfigException
      */
     public function getStorage($name)

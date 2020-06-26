@@ -5,16 +5,17 @@ namespace steroids\file\models;
 use Exception;
 use steroids\core\base\Model;
 use steroids\core\behaviors\TimestampBehavior;
-use steroids\file\processors\ImageCrop;
-use steroids\file\processors\ImageCropResize;
-use steroids\file\processors\ImageResize;
+use steroids\file\previews\ImageCrop;
+use steroids\file\previews\ImageCropResize;
+use steroids\file\previews\ImageResize;
 use steroids\file\exceptions\FileException;
 use steroids\file\FileModule;
-use steroids\file\storages\BaseStorage;
+use steroids\file\storages\Storage;
 use steroids\file\structure\UploaderFile;
 use Yii;
 use yii\base\Exception as YiiBaseException;
 use yii\base\InvalidConfigException;
+use yii\db\ActiveQuery;
 
 /**
  * @property integer $id
@@ -25,31 +26,21 @@ use yii\base\InvalidConfigException;
  * @property boolean $isOriginal
  * @property integer $width
  * @property integer $height
- * @property string $preview
+ * @property string $previewName
  * @property integer $createTime
  * @property string $amazoneS3Url
  * @property-read string $path
  * @property-read string $url
+ *
+ * @property-read File $file
+ * @property-read Storage $storage
  */
 class FileImage extends Model
 {
     /**
-     * @var BaseStorage
+     * @var Storage
      */
-    private ?BaseStorage $storage = null;
-
-    /**
-     * @throws InvalidConfigException
-     * @throws YiiBaseException
-     */
-    public function init()
-    {
-        $fileModule = FileModule::getInstance();
-        $this->storage = $fileModule->getStorage($fileModule->defaultStorageName);
-
-        parent::init();
-    }
-
+    private ?Storage $_storage = null;
 
     public static function isImageMimeType($value)
     {
@@ -90,11 +81,25 @@ class FileImage extends Model
     }
 
     /**
-     * @return string
+     * @return ActiveQuery
      */
-    public function getRelativePath()
+    public function getFile()
     {
-        return $this->storage->resolveRelativePath($this);
+        return $this->hasOne(File::class, ['id' => 'fileId']);
+    }
+
+    /**
+     * @return Storage
+     * @throws InvalidConfigException
+     * @throws YiiBaseException
+     */
+    public function getStorage()
+    {
+        if (!$this->_storage) {
+            $fileModule = FileModule::getInstance();
+            return $this->_storage = $fileModule->getStorage($this->file->storageName);
+        }
+        return $this->_storage;
     }
 
     /**
@@ -111,25 +116,6 @@ class FileImage extends Model
     public function getUrl()
     {
         return $this->storage->resolvePath($this);
-    }
-
-    /**
-     * @return bool
-     * @throws FileException
-     * @throws YiiBaseException
-     */
-    public function beforeDelete()
-    {
-        if (!parent::beforeDelete()) {
-            return false;
-        }
-
-        // Delete file
-        if (file_exists($this->getPath()) && !unlink($this->getPath())) {
-            throw new FileException('Can not remove image thumb file `' . $this->getRelativePath() . '`.');
-        }
-
-        return true;
     }
 
     /**
@@ -163,7 +149,7 @@ class FileImage extends Model
         /** @var FileImage $previewImage */
         $previewImage = FileImage::findOne([
             'fileId' => $fileId,
-            'preview' => $previewName,
+            'previewName' => $previewName,
         ]);
 
         if ($previewImage) {
@@ -171,7 +157,7 @@ class FileImage extends Model
         }
 
         $previewImage = static::createPreviewImage($fileId, $previewName, $uploaderFile);
-        $previewImage->preview = $previewName;
+        $previewImage->previewName = $previewName;
         $previewImage->preview($previewName, $uploaderFile);
         $previewImage->save();
 
@@ -179,6 +165,9 @@ class FileImage extends Model
     }
 
     /**
+     * Getting upload file and save it
+     * according to storage
+     *
      * @param string $fileId
      * @param string $previewName
      * @param UploaderFile $uploaderFile
@@ -207,21 +196,35 @@ class FileImage extends Model
             . '.' . $previewName
             . '.' . $previewExtension;
 
-        $destPath = $previewImage->getPath();
-        if ($uploaderFile && $uploaderFile->source) {
-            $imageRaw = static::getRawData($uploaderFile->source);
-        } else {
-            $imageRaw = file_get_contents($originalImage->getPath());
-        }
-
-        // Create new file
-        if (!file_put_contents($destPath, $imageRaw)) {
-            throw new FileException('Can not clone original file `'
-                . '` to `' . $destPath . '`.'
-            );
-        }
+        $previewImage->savePreviewImage($uploaderFile);
 
         return $previewImage;
+    }
+
+    /**
+     * @param UploaderFile $uploaderFile
+     */
+    private function savePreviewImage($uploaderFile)
+    {
+        // Get from uploader file stream/path
+        $imgResource = $this->storage->read($uploaderFile);
+
+        // Create new uploader file and configure it for storage
+        $previewUploaderFile = new UploaderFile();
+        $fileName = implode(DIRECTORY_SEPARATOR, array_filter([
+            $this->folder !== DIRECTORY_SEPARATOR ? $this->folder : null,
+            $this->fileName,
+        ]));
+
+        $fileNameWithoutExtension = pathinfo($this->fileName, PATHINFO_FILENAME);
+
+        $previewUploaderFile->name = $fileName;
+        $previewUploaderFile->mimeType = $this->fileMimeType;
+        $previewUploaderFile->source = $imgResource;
+        $previewUploaderFile->setUid($fileNameWithoutExtension);
+
+        // Store
+        $this->storage->write($previewUploaderFile);
     }
 
     /**
@@ -240,20 +243,8 @@ class FileImage extends Model
         if (!$this->isNewRecord) {
 
             // Clone from original file
-            $originalMeta = static::findOriginal($this->fileId);
-
-            $destPath = $this->getPath();
-            if ($uploaderFile && $uploaderFile->source) {
-                $imageRaw = static::getRawData($uploaderFile->source);
-            } else {
-                $imageRaw = file_get_contents($originalMeta->getPath());
-            }
-
-            if (!unlink($this->getPath()) || !file_put_contents($destPath, $imageRaw)) {
-                throw new FileException('Can not re-create image meta file from original `'
-                    . '` to `' . $destPath . '`.'
-                );
-            }
+            $this->storage->delete($this->file);
+            $this->storage->write($uploaderFile);
         }
 
         if (is_string($previewConfig)) {
@@ -266,7 +257,7 @@ class FileImage extends Model
 
         /** @var ImageCrop|ImageCropResize|ImageResize $preview */
         $preview = Yii::createObject($previewConfig);
-        $preview->filePath = $this->storage->resolvePath($this);
+        $preview->filePath = $this->getPath();
 
         $preview->previewQuality = (int)FileModule::getInstance()->previewQuality;
         $preview->run();
@@ -302,18 +293,4 @@ class FileImage extends Model
             );
         }
     }
-
-    /**
-     * @param resource|string $source
-     * @return string
-     */
-    private static function getRawData($source)
-    {
-        if (is_resource($source)) {
-            return stream_get_contents($source);
-        } else {
-            return file_get_contents($source);
-        }
-    }
-
 }

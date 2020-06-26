@@ -7,12 +7,15 @@ use steroids\file\models\File;
 use steroids\file\models\FileImage;
 use steroids\file\structure\StorageResult;
 use steroids\file\structure\UploaderFile;
+use Throwable;
 use Yii;
 use yii\base\InvalidConfigException;
+use yii\db\StaleObjectException;
+use yii\helpers\Url;
 use function GuzzleHttp\Psr7\stream_for;
 use function GuzzleHttp\Psr7\try_fopen;
 
-class AwsStorage extends BaseStorage
+class AwsStorage extends Storage
 {
     public string $key = '';
 
@@ -56,6 +59,18 @@ class AwsStorage extends BaseStorage
     }
 
     /**
+     * @param UploaderFile $file
+     * @return resource
+     */
+    public function read(UploaderFile $file)
+    {
+        if (is_resource($file->source)) {
+            return $file->source;
+        }
+        return try_fopen($file->source,'r');
+    }
+
+    /**
      * @param UploaderFile $uploaderFile
      * @param string $folderToSave Relative folder path to save
      * @return StorageResult
@@ -94,21 +109,25 @@ class AwsStorage extends BaseStorage
 
     /**
      * @param File|FileImage $file
-     * @return string
-     */
-    public function resolveRelativePath($file)
-    {
-        return $file->amazoneS3Url;
-    }
-
-    /**
-     * @param File $file
-     * @return string
+     * @throws Throwable
+     * @throws StaleObjectException
      */
     public function delete($file)
     {
-        $this->amazoneStorage->delete($file->fileName);
-        return true;
+        $path = $this->getFullFileName($file);
+
+        $imagesMeta = FileImage::findAll(['fileId' => $file->id]);
+        ob_start();
+        foreach ($imagesMeta as $imageMeta) {
+            $imageMetaPath = $this->getFullFileName($imageMeta);
+            // Delete image meta file
+            $this->amazoneStorage->delete($imageMetaPath);
+            $imageMeta->delete();
+        }
+
+        // Delete original file
+        $this->amazoneStorage->delete($path);
+        ob_end_clean();
     }
 
     /**
@@ -126,6 +145,6 @@ class AwsStorage extends BaseStorage
      */
     public function resolveDownloadUrl($file)
     {
-        return $file->amazoneS3Url;
+        return Url::to(['/file/download/index', 'uid' => $file->uid, 'name' => $file->getDownloadName()], true);
     }
 }

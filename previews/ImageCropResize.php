@@ -1,10 +1,10 @@
 <?php
 
-namespace steroids\file\processors;
+namespace steroids\file\previews;
 
 class ImageCropResize extends FilePreview
 {
-    protected function runInternal()
+    public function run()
     {
         list($originalWidth, $originalHeight) = getimagesize($this->filePath);
 

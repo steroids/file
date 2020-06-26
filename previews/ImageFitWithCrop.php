@@ -1,6 +1,6 @@
 <?php
 
-namespace steroids\file\processors;
+namespace steroids\file\previews;
 
 /**
  * Class ImageFit
@@ -9,7 +9,7 @@ namespace steroids\file\processors;
  * The difference between ImageResize processor is that in ImageFit only larger side is resized to fit it's size,
  * while smaller side is cropped to fit it's size.
  *
- * @package steroids\file\processors
+ * @package steroids\file\previews
  */
 class ImageFitWithCrop extends FilePreview
 {
@@ -28,7 +28,7 @@ class ImageFitWithCrop extends FilePreview
         return [$scaleX, $maxScale, $minScale, $originalWidth, $originalHeight];
     }
 
-    protected function runInternal()
+    public function run()
     {
         list($scaleX, $maxScale, $minScale, $originalWidth, $originalHeight) = $this->getSizesAndScales();
 

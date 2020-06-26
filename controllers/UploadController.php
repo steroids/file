@@ -6,6 +6,7 @@ use steroids\file\exceptions\FileException;
 use steroids\file\FileModule;
 use steroids\file\models\File;
 use steroids\file\models\FileImage;
+use steroids\file\structure\UploaderFile;
 use Yii;
 use yii\base\Exception;
 use yii\helpers\Json;
@@ -25,12 +26,12 @@ class UploadController extends Controller
         $fixedSize = Yii::$app->request->get('fixedSize');
         $source = Yii::$app->request->get('source');
 
-        //TODO doesn't exist method
-        $result = FileModule::getInstance()->upload([
-            'mimeTypes' => is_string($mimeTypes) ? explode(',', $mimeTypes) : $mimeTypes,
-        ], [
-            'fixedSize' => is_string($fixedSize) ? explode(',', $fixedSize) : $fixedSize,
-        ], $source);
+        $uploaderFile = new UploaderFile();
+        $uploaderFile->source = $source;
+        $uploaderFile->size = is_string($fixedSize) ? explode(',', $fixedSize) : $fixedSize;
+        $uploaderFile->mimeType = (string)(is_string($mimeTypes) ? explode(',', $mimeTypes) : $mimeTypes);
+
+        $result = FileModule::getInstance()->uploadFromRequest(null, $uploaderFile);
 
         if (isset($result['errors'])) {
             return [
@@ -58,8 +59,7 @@ class UploadController extends Controller
      */
     public function actionEditor($CKEditorFuncNum = null)
     {
-        //TODO doesn't exist method
-        $result = FileModule::getInstance()->upload();
+        $result = FileModule::getInstance()->uploadFromRequest();
         if (!isset($result['errors'])) {
             /** @var File $file */
             $file = $result[0];

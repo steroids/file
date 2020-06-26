@@ -38,14 +38,14 @@ class M000000000003File extends Migration
             'isOriginal' => $this->boolean(),
             'width' => $this->smallInteger(),
             'height' => $this->smallInteger(),
-            'preview' => $this->string(),
+            'previewName' => $this->string(),
             'createTime' => $this->dateTime(),
             'updateTime' => $this->dateTime(),
             'amazoneS3Url' => $this->text(),
         ]);
         $this->createIndex('file_preview', 'files_images_meta', [
             'fileId',
-            'preview',
+            'previewName',
         ]);
         $this->createIndex('original', 'files_images_meta', [
             'fileId',

@@ -8,7 +8,7 @@ use steroids\core\behaviors\UidBehavior;
 use steroids\core\exceptions\ModelSaveException;
 use steroids\file\exceptions\FileException;
 use steroids\file\FileModule;
-use steroids\file\storages\BaseStorage;
+use steroids\file\storages\Storage;
 use steroids\file\structure\Photo;
 use steroids\file\structure\UploaderFile;
 use Throwable;
@@ -34,6 +34,7 @@ use yii\base\InvalidConfigException;
  *
  * @property string $md5
  * @property integer $userId
+ * @property-read Storage $storage
  */
 class File extends Model
 {
@@ -50,20 +51,22 @@ class File extends Model
     }
 
     /**
-     * @var BaseStorage|null
+     * @var Storage|null
      */
-    private ?BaseStorage $storage = null;
+    private ?Storage $_storage = null;
 
     /**
+     * @return Storage
      * @throws InvalidConfigException
      * @throws YiiBaseException
      */
-    public function init()
+    public function getStorage()
     {
-        $fileModule = FileModule::getInstance();
-        $this->storage = $fileModule->getStorage($fileModule->defaultStorageName);
-
-        parent::init();
+        if (!$this->_storage) {
+            $fileModule = FileModule::getInstance();
+            return $this->_storage = $fileModule->getStorage($fileModule->defaultStorageName);
+        }
+        return $this->_storage;
     }
 
     /**
@@ -199,14 +202,6 @@ class File extends Model
     /**
      * @return string
      */
-    public function getRelativePath()
-    {
-        return $this->storage->resolveRelativePath($this);
-    }
-
-    /**
-     * @return string
-     */
     public function getUrl()
     {
         return $this->storage->resolveUrl($this);
@@ -245,7 +240,8 @@ class File extends Model
             return false;
         }
 
-        return $this->storage->delete($this);
+        $this->storage->delete($this);
+        return true;
     }
 
     /**
@@ -287,7 +283,7 @@ class File extends Model
                 'fileName' => $this->fileName,
                 'fileMimeType' => $this->fileMimeType,
                 'isOriginal' => true,
-                'preview' => FileModule::PREVIEW_ORIGINAL,
+                'previewName' => FileModule::PREVIEW_ORIGINAL,
             ]);
 
             // Save
