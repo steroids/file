@@ -10,7 +10,7 @@ use steroids\file\previews\ImageCropResize;
 use steroids\file\previews\ImageResize;
 use steroids\file\exceptions\FileException;
 use steroids\file\FileModule;
-use steroids\file\storages\Storage;
+use steroids\file\storages\BaseStorage;
 use steroids\file\structure\UploaderFile;
 use Yii;
 use yii\base\Exception as YiiBaseException;
@@ -33,14 +33,14 @@ use yii\db\ActiveQuery;
  * @property-read string $url
  *
  * @property-read File $file
- * @property-read Storage $storage
+ * @property-read BaseStorage $storage
  */
 class FileImage extends Model
 {
     /**
-     * @var Storage
+     * @var BaseStorage
      */
-    private ?Storage $_storage = null;
+    private ?BaseStorage $_storage = null;
 
     public static function isImageMimeType($value)
     {
@@ -60,6 +60,17 @@ class FileImage extends Model
             'height',
             'url',
         ];
+    }
+
+    public function beforeDelete()
+    {
+        if (!parent::beforeDelete()) {
+            return false;
+        }
+
+        // Delete file
+        $this->storage->deleteImageMeta($this);
+        return true;
     }
 
     /**
@@ -89,7 +100,7 @@ class FileImage extends Model
     }
 
     /**
-     * @return Storage
+     * @return BaseStorage
      * @throws InvalidConfigException
      * @throws YiiBaseException
      */
@@ -156,7 +167,7 @@ class FileImage extends Model
             return $previewImage;
         }
 
-        $previewImage = static::createPreviewImage($fileId, $previewName, $uploaderFile);
+        $previewImage = static::createPreviewImage($fileId, $previewName);
         $previewImage->previewName = $previewName;
         $previewImage->preview($previewName, $uploaderFile);
         $previewImage->save();
@@ -165,17 +176,13 @@ class FileImage extends Model
     }
 
     /**
-     * Getting upload file and save it
-     * according to storage
-     *
      * @param string $fileId
      * @param string $previewName
-     * @param UploaderFile $uploaderFile
      * @return static
      * @throws Exception
      * @throws FileException
      */
-    protected static function createPreviewImage($fileId, $previewName, $uploaderFile = null)
+    protected static function createPreviewImage($fileId, $previewName)
     {
         // Get original image
         $originalImage = static::findOriginal($fileId);
@@ -196,18 +203,15 @@ class FileImage extends Model
             . '.' . $previewName
             . '.' . $previewExtension;
 
-        $previewImage->savePreviewImage($uploaderFile);
+        $previewImage->savePreviewImage();
 
         return $previewImage;
     }
 
-    /**
-     * @param UploaderFile $uploaderFile
-     */
-    private function savePreviewImage($uploaderFile)
+    private function savePreviewImage()
     {
-        // Get from uploader file stream/path
-        $imgResource = $this->storage->read($uploaderFile);
+        // Get stream to file
+        $imgResource = $this->storage->read($this->file);
 
         // Create new uploader file and configure it for storage
         $previewUploaderFile = new UploaderFile();
@@ -228,10 +232,6 @@ class FileImage extends Model
     }
 
     /**
-     * If $uploaderFile established
-     * then field $source will be used
-     * for getting path/stream file
-     *
      * @param string|array $previewConfig
      * @param UploaderFile|null $uploaderFile
      * @throws FileException
@@ -241,9 +241,7 @@ class FileImage extends Model
     public function preview($previewConfig = '', $uploaderFile = null)
     {
         if (!$this->isNewRecord) {
-
-            // Clone from original file
-            $this->storage->delete($this->file);
+            $this->storage->deleteImageMeta($this);
             $this->storage->write($uploaderFile);
         }
 
@@ -257,8 +255,8 @@ class FileImage extends Model
 
         /** @var ImageCrop|ImageCropResize|ImageResize $preview */
         $preview = Yii::createObject($previewConfig);
-        $preview->filePath = $this->getPath();
-
+        $preview->source = $this->storage->read($this);
+        $preview->previewExtension = (string)FileModule::getInstance()->previewExtension;
         $preview->previewQuality = (int)FileModule::getInstance()->previewQuality;
         $preview->run();
 

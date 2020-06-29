@@ -7,9 +7,14 @@ use yii\base\BaseObject;
 
 abstract class FilePreview extends BaseObject
 {
-    public string $filePath = '';
+    /**
+     * @var resource
+     */
+    public $source;
 
     public int $previewQuality = 90;
+
+    public string $previewExtension = 'jpg';
 
     /**
      * @var int

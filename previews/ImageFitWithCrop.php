@@ -15,7 +15,8 @@ class ImageFitWithCrop extends FilePreview
 {
     protected function getSizesAndScales()
     {
-        $imageContent = file_get_contents($this->filePath);
+        $imageContent = stream_get_contents($this->source);
+        rewind($this->source);
 
         // New size
         list($originalWidth, $originalHeight) = getimagesizefromstring($imageContent);
@@ -42,7 +43,7 @@ class ImageFitWithCrop extends FilePreview
         // If the image is smaller than the given sizes, then resize it so that at least one side would fit the given size
         if ($maxScale < 1 && $minScale < 1) {
             $resizeProcessor = new ImageResize([
-                'filePath' => $this->filePath,
+                'source' => $this->source,
                 'width' => $this->width,
                 'height' => $this->height,
                 'previewQuality' => $this->previewQuality,
@@ -72,7 +73,7 @@ class ImageFitWithCrop extends FilePreview
             }
 
             $cropProcessor = new ImageCrop([
-                'filePath' => $this->filePath,
+                'source' => $this->source,
                 'width' => $cropWidth,
                 'height' => $cropHeight,
                 'previewQuality' => $this->previewQuality,

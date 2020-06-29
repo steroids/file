@@ -10,7 +10,7 @@ use steroids\file\storages\FileStorage;
 use steroids\core\base\Module;
 use steroids\file\models\File;
 use steroids\file\structure\UploaderFile;
-use steroids\file\storages\Storage;
+use steroids\file\storages\BaseStorage;
 use steroids\file\uploaders\BaseUploader;
 use steroids\file\uploaders\PostUploader;
 use steroids\file\uploaders\PutUploader;
@@ -262,7 +262,7 @@ class FileModule extends Module
 
     /**
      * @param string $name
-     * @return Storage|null
+     * @return BaseStorage|null
      * @throws InvalidConfigException
      */
     public function getStorage($name)

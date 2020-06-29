@@ -3,20 +3,21 @@
 namespace steroids\file\previews;
 
 use Exception;
-use steroids\file\models\ResizeParameters;
+use steroids\file\structure\ResizeParameters;
 
 class PreviewHelper
 {
-    public static function resizeImage($imageContent, $filePath, ResizeParameters $parameters)
+    public static function resizeImage($imageContent, $source, $previewExtension, ResizeParameters $parameters)
     {
         $bool = true;
         $src = imagecreatefromstring($imageContent);
-        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        $extension = $previewExtension;
 
         // Auto-rotate
         if ($extension === 'jpg' || $extension === 'jpeg') {
             try {
-                $exif = exif_read_data($filePath);
+                $exif = exif_read_data($source);
+                rewind($source);
             } catch (Exception $e) {
             }
 
@@ -52,8 +53,8 @@ class PreviewHelper
             );
 
         $bool && $extension === 'png' ?
-            imagepng($dst, $filePath) :
-            imagejpeg($dst, $filePath, $parameters->previewQuality);
+            imagepng($dst, $source) :
+            imagejpeg($dst, $source, $parameters->previewQuality);
 
         // Clean
         if ($src) {
@@ -62,5 +63,7 @@ class PreviewHelper
         if ($dst) {
             imagedestroy($dst);
         }
+
+        rewind($source);
     }
 }

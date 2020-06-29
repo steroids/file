@@ -1,6 +1,6 @@
 <?php
 
-namespace steroids\file\models;
+namespace steroids\file\structure;
 
 use yii\base\BaseObject;
 

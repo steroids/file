@@ -6,7 +6,10 @@ class ImageCropResize extends FilePreview
 {
     public function run()
     {
-        list($originalWidth, $originalHeight) = getimagesize($this->filePath);
+        $imageContent = stream_get_contents($this->source);
+        rewind($this->source);
+
+        list($originalWidth, $originalHeight) = getimagesizefromstring($imageContent);
 
         // Defaults offset - center
         $minOriginalSize = min($originalWidth, $originalHeight);
@@ -20,7 +23,7 @@ class ImageCropResize extends FilePreview
 
         // Crop
         $cropProcessor = new ImageCrop([
-            'filePath' => $this->filePath,
+            'source' => $this->source,
             'width' => $cropWidth,
             'height' => $cropHeight,
             'previewQuality' => $this->previewQuality,
@@ -31,7 +34,7 @@ class ImageCropResize extends FilePreview
 
         // Resize
         $fitProcessor = new ImageResize([
-            'filePath' => $this->filePath,
+            'source' => $this->source,
             'width' => $this->width,
             'height' => $this->height,
             'previewQuality' => $this->previewQuality,

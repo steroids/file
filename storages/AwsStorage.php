@@ -11,18 +11,18 @@ use Throwable;
 use Yii;
 use yii\base\InvalidConfigException;
 use yii\db\StaleObjectException;
-use yii\helpers\Url;
+use yii\helpers\FileHelper;
 use function GuzzleHttp\Psr7\stream_for;
 use function GuzzleHttp\Psr7\try_fopen;
 
-class AwsStorage extends Storage
+class AwsStorage extends BaseStorage
 {
     public string $key = '';
 
     public string $secret = '';
 
     /**
-     * @var Service|object|null
+     * @var Service|null
      */
     private ?Service $amazoneStorage = null;
 
@@ -59,15 +59,12 @@ class AwsStorage extends Storage
     }
 
     /**
-     * @param UploaderFile $file
+     * @param File|FileImage $file
      * @return resource
      */
-    public function read(UploaderFile $file)
+    public function read($file)
     {
-        if (is_resource($file->source)) {
-            return $file->source;
-        }
-        return try_fopen($file->source,'r');
+        return try_fopen($file->getUrl(), 'r+');
     }
 
     /**
@@ -81,6 +78,7 @@ class AwsStorage extends Storage
         $fileName = ($fileFolder ? $fileFolder . '/' : '') . $uploaderFile->name;
         $sourceResource = try_fopen($uploaderFile->source, 'r+');
         $sourceStream = stream_for($sourceResource);
+        $uploaderFile->mimeType = (string)FileHelper::getMimeTypeByExtension($fileName);
 
         ob_start();
         $this->amazoneStorage
@@ -104,24 +102,32 @@ class AwsStorage extends Storage
      */
     public function resolvePath($file)
     {
-        return $file->amazoneS3Url;
+        return null;
     }
 
     /**
-     * @param File|FileImage $file
+     * @param FileImage $fileImage
+     * @throws Throwable
+     */
+    public function deleteImageMeta($fileImage)
+    {
+        $imageMetaPath = $this->getFullPath($fileImage);
+        // Delete image meta file
+        $this->amazoneStorage->delete($imageMetaPath);
+    }
+
+    /**
+     * @param File $file
      * @throws Throwable
      * @throws StaleObjectException
      */
     public function delete($file)
     {
-        $path = $this->getFullFileName($file);
+        $path = $this->getFullPath($file);
 
         $imagesMeta = FileImage::findAll(['fileId' => $file->id]);
         ob_start();
         foreach ($imagesMeta as $imageMeta) {
-            $imageMetaPath = $this->getFullFileName($imageMeta);
-            // Delete image meta file
-            $this->amazoneStorage->delete($imageMetaPath);
             $imageMeta->delete();
         }
 
@@ -137,14 +143,5 @@ class AwsStorage extends Storage
     public function resolveUrl($file)
     {
         return $file->amazoneS3Url;
-    }
-
-    /**
-     * @param File|FileImage $file
-     * @return string
-     */
-    public function resolveDownloadUrl($file)
-    {
-        return Url::to(['/file/download/index', 'uid' => $file->uid, 'name' => $file->getDownloadName()], true);
     }
 }

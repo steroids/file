@@ -2,7 +2,7 @@
 
 namespace steroids\file\previews;
 
-use steroids\file\models\ResizeParameters;
+use steroids\file\structure\ResizeParameters;
 
 class ImageResize extends FilePreview
 {
@@ -13,7 +13,8 @@ class ImageResize extends FilePreview
 
     public function run()
     {
-        $imageContent = file_get_contents($this->filePath);
+        $imageContent = stream_get_contents($this->source);
+        rewind($this->source);
 
         // New size
         list($originalWidth, $originalHeight) = getimagesizefromstring($imageContent);
@@ -42,6 +43,6 @@ class ImageResize extends FilePreview
             'previewQuality' => $this->previewQuality,
         ]);
 
-        PreviewHelper::resizeImage($imageContent, $this->filePath, $resizeParameters);
+        PreviewHelper::resizeImage($imageContent, $this->source,$this->previewExtension, $resizeParameters);
     }
 }

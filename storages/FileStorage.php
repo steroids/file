@@ -12,9 +12,8 @@ use Yii;
 use yii\base\Exception;
 use yii\base\InvalidConfigException;
 use yii\helpers\FileHelper;
-use yii\helpers\Url;
 
-class FileStorage extends Storage
+class FileStorage extends BaseStorage
 {
     /**
      * Absolute path to root user files dir
@@ -38,22 +37,20 @@ class FileStorage extends Storage
     }
 
     /**
-     * @param UploaderFile $file
+     * @param File|FileImage $file
      * @return resource
      */
-    public function read(UploaderFile $file)
+    public function read($file)
     {
-        if (is_resource($file->source)) {
-            return $file->source;
-        }
-        return fopen($file->source, 'r');
+        return fopen($file->getPath(), 'r+');
     }
 
     /**
-     * @inheritDoc
-     *
-     * @throws FileException
+     * @param UploaderFile $file
+     * @param string|null $folder
+     * @return StorageResult
      * @throws Exception
+     * @throws FileException
      * @throws InvalidConfigException
      */
     public function write(UploaderFile $file, $folder = null)
@@ -78,10 +75,16 @@ class FileStorage extends Storage
             throw new FileException('Destination directory is not writable: ' . $folderPath);
         }
 
+        if (is_resource($file->source)) {
+            $imageData = stream_get_contents($file->source);
+        } else {
+            $imageData = file_get_contents($file->source);
+        }
+
         // Upload file content
         file_put_contents(
             $path,
-            stream_get_contents($this->read($file)),
+            $imageData,
             $file->contentRange && $file->contentRange['start'] > 0 ? FILE_APPEND : 0
         );
 
@@ -125,7 +128,7 @@ class FileStorage extends Storage
      */
     public function resolvePath($file)
     {
-        return $this->getFullFileName($file, $this->rootPath);
+        return $this->getFullPath($file, $this->rootPath);
     }
 
     /**
@@ -134,7 +137,7 @@ class FileStorage extends Storage
      */
     public function resolveUrl($file)
     {
-        return $this->getFullFileName($file, $this->rootUrl);
+        return $this->getFullPath($file, $this->rootUrl);
     }
 
     /**
@@ -142,13 +145,26 @@ class FileStorage extends Storage
      * @param string|null $root
      * @return string
      */
-    protected function getFullFileName($file, $root = null)
+    protected function getFullPath($file, $root = null)
     {
         return implode(DIRECTORY_SEPARATOR, array_filter([
             $root,
             $file->folder !== DIRECTORY_SEPARATOR ? $file->folder : null,
             $file->fileName
         ]));
+    }
+
+    /**
+     * @param FileImage $fileImage
+     * @throws FileException
+     * @throws Throwable
+     */
+    public function deleteImageMeta($fileImage)
+    {
+        $imageMetaPath = $fileImage->getPath();
+        if (file_exists($imageMetaPath) && !unlink($imageMetaPath)) {
+            throw new FileException('Can not remove image meta file `' . $imageMetaPath . '`.');
+        }
     }
 
     /**
@@ -162,15 +178,11 @@ class FileStorage extends Storage
         // Remove image meta info
         $imagesMeta = FileImage::findAll(['fileId' => $file->id]);
         foreach ($imagesMeta as $imageMeta) {
-            $imageMetaPath = $imageMeta->getPath();
-            if (file_exists($imageMetaPath) && !unlink($imageMetaPath)) {
-                throw new FileException('Can not remove image thumb file `' . $imageMetaPath . '`.');
-            }
             $imageMeta->delete();
         }
 
         $filesRootPath = $this->rootPath;
-        $filePath = $this->resolvePath($file);
+        $filePath = $this->getFullPath($file);
 
         // Delete file
         if (file_exists($filePath) && !unlink($filePath)) {
@@ -201,14 +213,5 @@ class FileStorage extends Storage
                 throw new FileException('Can not remove empty folder `' . $folderPath . '`.');
             }
         }
-    }
-
-    /**
-     * @param File $file
-     * @return string
-     */
-    public function resolveDownloadUrl($file)
-    {
-        return Url::to(['/file/download/index', 'uid' => $file->uid, 'name' => $file->getDownloadName()], true);
     }
 }

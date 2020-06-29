@@ -8,12 +8,13 @@ use steroids\core\behaviors\UidBehavior;
 use steroids\core\exceptions\ModelSaveException;
 use steroids\file\exceptions\FileException;
 use steroids\file\FileModule;
-use steroids\file\storages\Storage;
+use steroids\file\storages\BaseStorage;
 use steroids\file\structure\Photo;
 use steroids\file\structure\UploaderFile;
 use Throwable;
 use yii\base\Exception as YiiBaseException;
 use yii\base\InvalidConfigException;
+use yii\helpers\Url;
 
 /**
  * @property integer $id
@@ -34,7 +35,7 @@ use yii\base\InvalidConfigException;
  *
  * @property string $md5
  * @property integer $userId
- * @property-read Storage $storage
+ * @property-read BaseStorage $storage
  */
 class File extends Model
 {
@@ -51,12 +52,12 @@ class File extends Model
     }
 
     /**
-     * @var Storage|null
+     * @var BaseStorage|null
      */
-    private ?Storage $_storage = null;
+    private ?BaseStorage $_storage = null;
 
     /**
-     * @return Storage
+     * @return BaseStorage
      * @throws InvalidConfigException
      * @throws YiiBaseException
      */
@@ -214,11 +215,16 @@ class File extends Model
     }
 
     /**
+     * @param File $file
      * @return string
      */
-    public function getDownloadUrl()
+    public function resolveDownloadUrl($file)
     {
-        return $this->storage->resolveDownloadUrl($this);
+        return Url::to([
+            '/file/download/index',
+            'uid' => $file->uid,
+            'name' => $file->getDownloadName()
+        ], true);
     }
 
     /*public function getIconName()

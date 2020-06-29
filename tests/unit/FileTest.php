@@ -22,6 +22,36 @@ class FileTest extends TestCase
     {
         $module = FileModule::getInstance();
 
+        $fileName = 'text.txt';
+        $rootFilePath = dirname(__DIR__) . '/testData';
+
+        $module->storages = [
+            'file' => [
+                'class' => FileStorage::class,
+                'rootPath' => $rootFilePath,
+                'rootUrl' => $rootFilePath,
+            ]
+        ];
+
+        $uploadedFile = new UploaderFile([
+            'name' => $fileName,
+            'source' => $rootFilePath . DIRECTORY_SEPARATOR . $fileName,
+        ]);
+
+        $file = $module->uploadFromFile($uploadedFile, null, FileModule::STORAGE_FILE);
+
+        $this->assertTrue(file_exists($rootFilePath . DIRECTORY_SEPARATOR . $file->fileName));
+    }
+
+    /**
+     * Upload image
+     *
+     * @throws Exception
+     */
+    public function testSaveImage()
+    {
+        $module = FileModule::getInstance();
+
         $fileName = 'beach.jpeg';
         $rootFilePath = dirname(__DIR__) . '/testData';
 

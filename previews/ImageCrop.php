@@ -2,7 +2,7 @@
 
 namespace steroids\file\previews;
 
-use steroids\file\models\ResizeParameters;
+use steroids\file\structure\ResizeParameters;
 
 class ImageCrop extends FilePreview
 {
@@ -18,7 +18,9 @@ class ImageCrop extends FilePreview
 
     public function run()
     {
-        $imageContent = file_get_contents($this->filePath);
+        $imageContent = stream_get_contents($this->source);
+        rewind($this->source);
+
         list($originalWidth, $originalHeight) = getimagesizefromstring($imageContent);
 
         // Check if crop is smaller or equal than original image
@@ -44,6 +46,6 @@ class ImageCrop extends FilePreview
             'previewQuality' => $this->previewQuality,
         ]);
 
-        PreviewHelper::resizeImage($imageContent, $this->filePath, $resizeParameters);
+        PreviewHelper::resizeImage($imageContent, $this->source, $this->previewExtension,$resizeParameters);
     }
 }
