@@ -126,7 +126,7 @@ class FileImage extends Model
      */
     public function getUrl()
     {
-        return $this->storage->resolvePath($this);
+        return $this->storage->resolveUrl($this);
     }
 
     /**

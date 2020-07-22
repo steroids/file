@@ -215,15 +215,14 @@ class File extends Model
     }
 
     /**
-     * @param File $file
      * @return string
      */
-    public function resolveDownloadUrl($file)
+    public function getDownloadUrl()
     {
         return Url::to([
             '/file/download/index',
-            'uid' => $file->uid,
-            'name' => $file->getDownloadName()
+            'uid' => $this->uid,
+            'name' => $this->getDownloadName()
         ], true);
     }
 
@@ -309,8 +308,12 @@ class File extends Model
     {
         $images = [];
         if ($this->isImage()) {
-            foreach ($this->previews as $previewName) {
-                $images[$previewName] = $this->getImagePreview($previewName);
+            foreach ($this->previews as $previewName => $preview) {
+                if (is_string($preview)) {
+                    $images[$preview] = $this->getImagePreview($preview);
+                } else {
+                    $images[$previewName] = $preview;
+                }
             }
         } elseif (in_array(FileModule::PREVIEW_DEFAULT, $this->previews)) {
             $iconsPath = FileModule::getInstance()->iconsRootPath;

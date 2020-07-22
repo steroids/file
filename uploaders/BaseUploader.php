@@ -7,6 +7,8 @@ use yii\base\BaseObject;
 
 abstract class BaseUploader extends BaseObject
 {
+    public string $name;
+
     /**
      * @param integer|string $size
      * @return integer
