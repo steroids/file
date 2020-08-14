@@ -29,6 +29,7 @@ class ImageCropResize extends FilePreview
             'previewQuality' => $this->previewQuality,
             'offsetX' => round(($originalWidth - $cropWidth) / 2),
             'offsetY' => round(($originalHeight - $cropHeight) / 2),
+            'previewExtension' => $this->previewExtension
         ]);
         $cropProcessor->run();
 
@@ -38,6 +39,7 @@ class ImageCropResize extends FilePreview
             'width' => $this->width,
             'height' => $this->height,
             'previewQuality' => $this->previewQuality,
+            'previewExtension' => $this->previewExtension
         ]);
         $fitProcessor->run();
         $this->width = $fitProcessor->width;

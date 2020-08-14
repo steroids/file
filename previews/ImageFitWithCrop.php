@@ -48,6 +48,7 @@ class ImageFitWithCrop extends FilePreview
                 'height' => $this->height,
                 'previewQuality' => $this->previewQuality,
                 'isFit' => false,
+                'previewExtension' => $this->previewExtension
             ]);
             $resizeProcessor->run();
 
@@ -79,6 +80,7 @@ class ImageFitWithCrop extends FilePreview
                 'previewQuality' => $this->previewQuality,
                 'offsetX' => $offsetX,
                 'offsetY' => $offsetY,
+                'previewExtension' => $this->previewExtension
             ]);
             $cropProcessor->run();
         }

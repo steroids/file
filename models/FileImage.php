@@ -256,7 +256,11 @@ class FileImage extends Model
         /** @var ImageCrop|ImageCropResize|ImageResize $preview */
         $preview = Yii::createObject($previewConfig);
         $preview->source = $this->storage->read($this);
-        $preview->previewExtension = (string)FileModule::getInstance()->previewExtension;
+
+        $extension = pathinfo($this->fileName, PATHINFO_EXTENSION);
+        $previewExtension = $extension && $extension === 'png' ? 'png' : (string)FileModule::getInstance()->previewExtension;
+
+        $preview->previewExtension = $previewExtension;
         $preview->previewQuality = (int)FileModule::getInstance()->previewQuality;
         $preview->run();
 
