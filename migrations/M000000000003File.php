@@ -6,8 +6,6 @@ use steroids\core\base\Migration;
 
 class M000000000003File extends Migration
 {
-    public $usersTable = 'users';
-
     public function safeUp()
     {
         $this->createTable('files', [
@@ -27,7 +25,6 @@ class M000000000003File extends Migration
             'userId' => $this->integer(),
         ]);
         $this->createIndex('uid', 'files', 'uid');
-        $this->createForeignKey('files', 'userId', $this->usersTable, 'id');
 
         $this->createTable('files_images_meta', [
             'id' => $this->primaryKey(),
