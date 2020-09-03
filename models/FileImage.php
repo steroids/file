@@ -78,7 +78,7 @@ class FileImage extends Model
      */
     public static function tableName()
     {
-        return '{{%files_images_meta}}';
+        return 'file_images';
     }
 
     /**
