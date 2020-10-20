@@ -126,7 +126,46 @@ class FileModule extends Module
     {
         parent::init();
 
-        $this->previews = ArrayHelper::merge($this->defaultPreviews(), $this->previews);
+        $this->uploaders = ArrayHelper::merge(
+            [
+                'put' => [
+                    'class' => PutUploader::class
+                ],
+            ],
+            $this->uploaders
+        );
+        $this->storages = ArrayHelper::merge(
+            [
+                'file' => [
+                    'class' => FileStorage::class,
+                ],
+            ],
+            $this->storages
+        );
+
+        $this->previews = ArrayHelper::merge(
+            [
+                self::PREVIEW_ORIGINAL => [
+                    'width' => 1920,
+                    'height' => 1200,
+                ],
+                self::PREVIEW_DEFAULT => [
+                    'width' => 200,
+                    'height' => 200,
+                    'crop' => true,
+                ],
+                self::PREVIEW_THUMBNAIL => [
+                    'width' => 500,
+                    'height' => 300,
+                    'crop' => true,
+                ],
+                self::PREVIEW_FULLSCREEN => [
+                    'width' => 1600,
+                    'height' => 1200,
+                ],
+            ],
+            $this->previews
+        );
 
         if ($this->iconsRootUrl) {
             $this->iconsRootUrl = Yii::getAlias($this->iconsRootUrl);
@@ -203,7 +242,7 @@ class FileModule extends Module
 
         // Save model
         if (!$file->save()) {
-            throw new FileUserException(implode(', ',  array_values($file->getFirstErrors())));
+            throw new FileUserException(implode(', ', array_values($file->getFirstErrors())));
         }
 
         // TODO Check file size
@@ -235,7 +274,7 @@ class FileModule extends Module
 
         // TODO Check file mime type format
         //if (is_array($this->mimeTypes) && !in_array(static::getFileMimeType($file->rawData['tmp_name']), $this->mimeTypes)) {
-            //throw new FileUserException(\Yii::t('steroids', 'Incorrect file format.'));
+        //throw new FileUserException(\Yii::t('steroids', 'Incorrect file format.'));
         //}
         // Check mime type from header
         /*if (is_array($this->mimeTypes) && !in_array($file->mimeType, $this->mimeTypes)) {
@@ -298,32 +337,5 @@ class FileModule extends Module
             ));
         }
         return $this->uploaders[$name];
-    }
-
-    /**
-     * @return array
-     */
-    protected function defaultPreviews()
-    {
-        return [
-            self::PREVIEW_ORIGINAL => [
-                'width' => 1920,
-                'height' => 1200,
-            ],
-            self::PREVIEW_DEFAULT => [
-                'width' => 200,
-                'height' => 200,
-                'crop' => true,
-            ],
-            self::PREVIEW_THUMBNAIL => [
-                'width' => 500,
-                'height' => 300,
-                'crop' => true,
-            ],
-            self::PREVIEW_FULLSCREEN => [
-                'width' => 1600,
-                'height' => 1200,
-            ],
-        ];
     }
 }
