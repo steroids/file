@@ -3,6 +3,8 @@
 namespace steroids\file;
 
 use Exception;
+use steroids\file\previews\ImageCropResize;
+use steroids\file\previews\ImageResize;
 use Yii;
 use steroids\file\exceptions\FileUserException;
 use steroids\file\storages\AwsStorage;
@@ -146,20 +148,22 @@ class FileModule extends Module
         $this->previews = ArrayHelper::merge(
             [
                 self::PREVIEW_ORIGINAL => [
+                    'class' => ImageResize::class,
                     'width' => 1920,
                     'height' => 1200,
                 ],
                 self::PREVIEW_DEFAULT => [
+                    'class' => ImageCropResize::class,
                     'width' => 200,
                     'height' => 200,
-                    'crop' => true,
                 ],
                 self::PREVIEW_THUMBNAIL => [
+                    'class' => ImageCropResize::class,
                     'width' => 500,
                     'height' => 300,
-                    'crop' => true,
                 ],
                 self::PREVIEW_FULLSCREEN => [
+                    'class' => ImageResize::class,
                     'width' => 1600,
                     'height' => 1200,
                 ],
