@@ -12,6 +12,7 @@ use steroids\file\storages\BaseStorage;
 use steroids\file\structure\Photo;
 use steroids\file\structure\UploaderFile;
 use Throwable;
+use Yii;
 use yii\base\Exception as YiiBaseException;
 use yii\base\InvalidConfigException;
 use yii\helpers\Url;
@@ -367,5 +368,23 @@ class File extends Model
     public function isImage()
     {
         return FileImage::isImageMimeType($this->fileMimeType);
+    }
+
+    public static function meta()
+    {
+        return [
+            'id' => [
+                'label' => Yii::t('app', 'Внутренний идентификатор'),
+                'example' => '1',
+                'appType' => 'primaryKey',
+                'isPublishToFrontend' => true
+            ],
+            'uid' => [
+                'label' => Yii::t('app', 'Уникальный идентификатор'),
+                'example' => '04aa0fa3-1bfa-46e6-8e1e-1301a9825cce',
+                'appType' => 'primaryKey',
+                'isPublishToFrontend' => true
+            ],
+        ];
     }
 }
