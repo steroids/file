@@ -35,7 +35,7 @@ class UploaderFile extends BaseObject
      * File mime type
      * @var string
      */
-    public string $mimeType = '';
+    public ?string $mimeType = null;
 
     /**
      * @var UploaderContentRange
