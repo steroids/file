@@ -1,0 +1,10 @@
+# windows thumbnail cache
+# windows thumbnail cache
+Thumbs.db
+
+# Mac DS_Store Files
+.DS_Store
+
+tests/testData
+!tests/testData/text.txt
+!tests/testData/beach.jpeg

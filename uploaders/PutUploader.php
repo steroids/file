@@ -44,15 +44,13 @@ class PutUploader extends BaseUploader
             $fileMimeType = $_SERVER['CONTENT_TYPE'];
         }
 
-        return [
-            new UploaderFile([
-                'uid' => ArrayHelper::getValue($_GET, 'uids.0') ?: ArrayHelper::getValue($_GET, 'uid'),
-                'name' => $fileName,
-                'size' => $fileSize,
-                'mimeType' => $fileMimeType,
-                'contentRange' => $contentRange,
-                'source' => fopen('php://input', 'r'),
-            ])
-        ];
+        return new UploaderFile([
+            'uid' => ArrayHelper::getValue($_GET, 'uids.0') ?: ArrayHelper::getValue($_GET, 'uid'),
+            'name' => $fileName,
+            'size' => $fileSize,
+            'mimeType' => $fileMimeType,
+            'contentRange' => $contentRange,
+            'source' => fopen('php://input', 'r'),
+        ]);
     }
 }

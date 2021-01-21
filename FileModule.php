@@ -2,10 +2,14 @@
 
 namespace steroids\file;
 
-use Exception;
-use steroids\file\previews\ImageCropResize;
-use steroids\file\previews\ImageResize;
+use steroids\file\events\UploadAfterEvent;
+use steroids\file\events\UploadEvent;
 use Yii;
+use Exception;
+use steroids\file\models\FileImage;
+use steroids\file\previews\ImageFitWithCrop;
+use steroids\file\previews\ImageResize;
+use steroids\file\structure\UploadOptions;
 use steroids\file\exceptions\FileUserException;
 use steroids\file\storages\AwsStorage;
 use steroids\file\storages\FileStorage;
@@ -20,13 +24,18 @@ use yii\base\Exception as YiiBaseException;
 use yii\base\InvalidConfigException;
 use yii\helpers\ArrayHelper;
 use yii\helpers\FileHelper;
+use yii\helpers\StringHelper;
+use yii\web\Response;
 
 class FileModule extends Module
 {
+    const EVENT_BEFORE_UPLOAD = 'beforeUpload';
+    const EVENT_AFTER_UPLOAD = 'afterUpload';
+
     const STORAGE_FILE = 'file';
     const STORAGE_AWS = 'aws';
 
-    const UPLOADER_POST = 'POST';
+    const UPLOADER_POST = 'post';
     const UPLOADER_PUT = 'put';
 
     const PREVIEW_ORIGINAL = 'original';
@@ -122,6 +131,11 @@ class FileModule extends Module
     public string $iconsRootPath = '';
 
     /**
+     * @var array
+     */
+    public array $classesMap = [];
+
+    /**
      * @inheritDoc
      */
     public function init()
@@ -153,17 +167,17 @@ class FileModule extends Module
                     'height' => 1200,
                 ],
                 self::PREVIEW_DEFAULT => [
-                    'class' => ImageCropResize::class,
+                    'class' => ImageFitWithCrop::class,
                     'width' => 200,
                     'height' => 200,
                 ],
                 self::PREVIEW_THUMBNAIL => [
-                    'class' => ImageCropResize::class,
+                    'class' => ImageFitWithCrop::class,
                     'width' => 500,
                     'height' => 300,
                 ],
                 self::PREVIEW_FULLSCREEN => [
-                    'class' => ImageResize::class,
+                    'class' => ImageFitWithCrop::class,
                     'width' => 1600,
                     'height' => 1200,
                 ],
@@ -183,108 +197,116 @@ class FileModule extends Module
             BaseUploader::normalizeSize(ini_get('upload_max_filesize')),
             BaseUploader::normalizeSize(ini_get('post_max_size'))
         );
+
+        $this->classesMap = array_merge([
+            'steroids\file\models\File' => File::class,
+            'steroids\file\models\FileImage' => FileImage::class,
+        ], $this->classesMap);
     }
 
     /**
-     * @param string $folder
-     * @param string $uploaderName
-     * @param string $storageName
-     * @return File[]
-     * @throws InvalidConfigException
-     */
-    public function uploadFromRequest($folder = null, $uploaderName = null, $storageName = null)
-    {
-        if (!$uploaderName) {
-            $uploaderName = empty($_FILES) ? self::UPLOADER_PUT : self::UPLOADER_POST;
-        }
-
-        return array_map(
-            fn($file) => $this->uploadFromFile($file, $folder, $storageName),
-            $this->getUploader($uploaderName)->upload()
-        );
-    }
-
-    /**
-     * @param UploaderFile|string|resource $uploaderFile
-     * @param string $folder
-     * @param string|null $storageName
+     * @param UploadOptions|array|string|null $options
      * @return File
+     * @throws FileUserException
+     * @throws InvalidConfigException
      * @throws YiiBaseException
-     * @throws Exception
+     * @throws exceptions\FileException
      */
-    public function uploadFromFile($uploaderFile, $folder = null, $storageName = null)
+    public function upload($options = null)
     {
-        // Single format for arguments
-        if (!is_object($uploaderFile)) {
-            $uploaderFile = new UploaderFile(['source' => $uploaderFile]);
+        // Normalize format
+        if (is_string($options)) {
+            $options = new UploadOptions(['source' => $options]);
+        }
+        if (is_array($options)) {
+            $options = new UploadOptions($options);
         }
 
-        $storageName = $storageName ?: $this->defaultStorageName;
+        // No file - upload from request
+        if (!$options->source) {
+            // Auto detect upload method
+            if (!$options->uploaderName) {
+                $options->uploaderName = empty($_FILES) ? self::UPLOADER_PUT : self::UPLOADER_POST;
+            }
+
+            // Create source from POST/PUT request
+            $options->source = $this->getUploader($options->uploaderName)->upload();
+
+            // Set response as json on exceptions
+            if (Yii::$app->response instanceof Response) {
+                Yii::$app->response->format = Response::FORMAT_JSON;
+            }
+        }
+
+        // Source as path to file
+        if (is_string($options->source) || is_resource($options->source)) {
+            $options->source = new UploaderFile([
+                'source' => $options->source,
+                'name' => is_string($options->source) ? StringHelper::basename($options->source) : null,
+            ]);
+        }
+
+        // Auto detect source file size
+        if (!$options->source->size) {
+            if (is_string($options->source->source)) {
+                $options->source->size = filesize($options->source->source);
+            } elseif (is_resource($options->source->source)) {
+                $options->source->size = fstat($options->source->source)['size'];
+            }
+        }
+
+        // Auto detect source file mime type by file extension
+        if (!$options->source->mimeType) {
+            $options->source->mimeType = FileHelper::getMimeTypeByExtension($options->source->name);
+        }
+
+        // Default storage name
+        if (!$options->storageName) {
+            $options->storageName = $this->defaultStorageName;
+        }
 
         // Normalize folder
-        if ($folder) {
-            $folder = FileHelper::normalizePath($folder);
+        if ($options->folder) {
+            $options->folder = FileHelper::normalizePath($options->folder);
         }
 
-        // Create model
-        $file = new File([
-            'uid' => $uploaderFile->uid,
-            'title' => $uploaderFile->title,
-            'folder' => $folder,
-            'fileName' => $uploaderFile->savedFileName,
-            'fileSize' => $uploaderFile->size,
-            'storageName' => $storageName,
-            'userId' => Yii::$app->has('user') ? Yii::$app->user->getId() : null,
-        ]);
-
-        // Save to storage
-        $storage = $this->getStorage($storageName);
-        $storageResult = $storage->write($uploaderFile, $folder);
-
-        $file->attributes = $storageResult->getAttributes();
-        $file->fileMimeType = $uploaderFile->mimeType;
-
-        // Save model
-        if (!$file->save()) {
-            throw new FileUserException(implode(', ', array_values($file->getFirstErrors())));
+        // Normalize mime types for image
+        if ($options->imagesOnly && !$options->mimeTypes) {
+            $options->mimeTypes = UploadOptions::imagesMimeTypes();
         }
 
-        // TODO Check file size
-        /*if ($file->size > $this->maxFileSize) {
-            $this->addError('files', \Yii::t('steroids', 'The uploaded file is too large. Max size: {size} Mb', [
-                'size' => round(($this->maxFileSize / 1024) / 1024),
-            ]));
-            return false;
-        }*/
-        /*if ($file->size && $file->size > $this->maxFileSize) {
-            $this->addError('maxFileSize', \Yii::t('steroids', 'The uploaded file is too large. Max size: {size} Mb', [
-                'size' => round(($this->maxFileSize / 1024) / 1024),
-            ]));
-            return false;
-        }*/
-        /*if ($file->size && $file->size > $this->maxRequestSize) {
-            $this->addError('maxRequestSize', \Yii::t('steroids', 'Summary uploaded files size is too large. Available size: {size} Mb', [
-                'size' => round(($this->maxRequestSize / 1024) / 1024),
-            ]));
-            return false;
-        }*/
-        /*$summaryFilesSize = array_sum(array_map(fn (UploaderFile $file) => $file->size, $this->files));
-        if ($summaryFilesSize > $this->maxRequestSize) {
-            $this->addError('maxRequestSize', \Yii::t('steroids', 'Summary uploaded files size is too large. Available size: {size} Mb', [
-                'size' => round(($this->maxRequestSize / 1024) / 1024),
-            ]));
-            return false;
-        }*/
+        // Run before event
+        if (!$this->beforeUpload($options)) {
+            return null;
+        }
 
-        // TODO Check file mime type format
-        //if (is_array($this->mimeTypes) && !in_array(static::getFileMimeType($file->rawData['tmp_name']), $this->mimeTypes)) {
-        //throw new FileUserException(\Yii::t('steroids', 'Incorrect file format.'));
-        //}
-        // Check mime type from header
-        /*if (is_array($this->mimeTypes) && !in_array($file->mimeType, $this->mimeTypes)) {
-            $this->addError('files', \Yii::t('steroids', 'Incorrect file format.'));
-            return false;
-        }*/
+        // Validate size
+        if ($options->source->size) {
+            // Project size limit
+            if ($options->maxSizeMb && $options->source->size > $options->maxSizeMb * 1024 * 1024) {
+                throw new FileUserException(\Yii::t('steroids', 'Файл слишком большой, загрузите файл не более {size} Mb', [
+                    'size' => $options->maxSizeMb,
+                ]));
+            }
+
+            // Server size limit
+            $serverMaxSize = min(
+                BaseUploader::normalizeSize(ini_get('upload_max_filesize')),
+                BaseUploader::normalizeSize(ini_get('post_max_size'))
+            );
+            if ($serverMaxSize && $options->source->size > $serverMaxSize) {
+                throw new FileUserException(\Yii::t('steroids', 'Конфигурация сервера позволяет загрузить файл не более {size} Mb', [
+                    'size' => round(($serverMaxSize / 1024) / 1024)
+                ]));
+            }
+        }
+
+        // Validate mime types
+        if (!empty($options->mimeTypes) && $options->source->mimeType
+            && !in_array($options->source->mimeType, $options->mimeTypes)
+        ) {
+            throw new FileUserException(\Yii::t('steroids', 'Неверный формат файла'));
+        }
 
         // TODO Check fix image size
         /*if (!empty($fileConfig['fixedSize']) && !$file->checkImageFixedSize($fileConfig['fixedSize'])) {
@@ -293,14 +315,111 @@ class FileModule extends Module
             ];
         }*/
 
+        // Create model
+        $file = new File([
+            'uid' => $options->source->uid,
+            'title' => $options->source->title,
+            'folder' => $options->folder,
+            'fileName' => $options->source->savedFileName,
+            'fileSize' => $options->source->size,
+            'storageName' => $options->storageName,
+            'userId' => Yii::$app->has('user') ? Yii::$app->user->getId() : null,
+        ]);
+
+        // Save to storage
+        $storage = $this->getStorage($options->storageName);
+        $storageResult = $storage->write($options->source, $options->folder);
+
+        // Refresh real attributes
+        $file->attributes = $storageResult->getAttributes();
+        $file->fileMimeType = $options->source->mimeType;
+
+        // Already check mime type, if it changed after real upload (and checked by file headers)
+        if ($options->source->mimeType !== $file->fileMimeType && !empty($options->mimeTypes)
+            && $options->source->mimeType && !in_array($options->source->mimeType, $options->mimeTypes)
+        ) {
+            throw new FileUserException(\Yii::t('steroids', 'Неверный формат файла'));
+        }
+
+        // Save model
+        if (!$file->save()) {
+            throw new FileUserException(\Yii::t('steroids', 'Ошибка при сохранении: {errors}', [
+                'errors' => implode(', ', array_values($file->getFirstErrors())),
+            ]));
+        }
+
         // Create image previews
         if (!$this->previewLazyCreate && $file->isImage()) {
             foreach (array_keys($this->previews) as $previewName) {
-                $file->getImagePreview($previewName, $uploaderFile);
+                $file->getImagePreview($previewName, $options->source);
             }
         }
 
+        // Run after event
+        $this->afterUpload($options, $file);
+
         return $file;
+    }
+
+    /**
+     * @param UploadOptions $options
+     * @return bool|null
+     */
+    public function beforeUpload(UploadOptions $options): ?bool
+    {
+        $event = new UploadEvent(['options' => $options]);
+        $this->trigger(self::EVENT_BEFORE_UPLOAD, $event);
+
+        return $event->isValid;
+    }
+
+    /**
+     * @param UploadOptions $options
+     * @param File $file
+     */
+    public function afterUpload(UploadOptions $options, File $file)
+    {
+        $this->trigger(self::EVENT_AFTER_UPLOAD, new UploadAfterEvent([
+            'options' => $options,
+            'file' => $file,
+        ]));
+    }
+
+    /**
+     * @param string $folder
+     * @param string $uploaderName
+     * @param string $storageName
+     * @return File[]
+     * @throws InvalidConfigException
+     * @deprecated Use upload() method
+     */
+    public function uploadFromRequest($folder = null, $uploaderName = null, $storageName = null)
+    {
+        return [
+            $this->upload(new UploadOptions([
+                'folder' => $folder,
+                'uploaderName' => $uploaderName,
+                'storageName' => $storageName,
+            ]))
+        ];
+    }
+
+    /**
+     * @param UploaderFile|string|resource $source
+     * @param string $folder
+     * @param string|null $storageName
+     * @return File
+     * @throws YiiBaseException
+     * @throws Exception
+     * @deprecated Use upload() method
+     */
+    public function uploadFromFile($source, $folder = null, $storageName = null)
+    {
+        return $this->upload(new UploadOptions([
+            'source' => $source,
+            'folder' => $folder,
+            'storageName' => $storageName,
+        ]));
     }
 
     /**

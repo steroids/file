@@ -3,11 +3,13 @@
 namespace steroids\file\tests\unit;
 
 use PHPUnit\Framework\TestCase;
+use steroids\file\exceptions\FileUserException;
 use steroids\file\FileModule;
 use steroids\file\models\FileImage;
 use steroids\file\previews\ImageCropResize;
 use steroids\file\structure\UploaderFile;
 use steroids\file\storages\FileStorage;
+use steroids\file\structure\UploadOptions;
 use Throwable;
 use yii\base\Exception;
 
@@ -38,7 +40,10 @@ class FileTest extends TestCase
             'source' => $rootFilePath . DIRECTORY_SEPARATOR . $fileName,
         ]);
 
-        $file = $module->uploadFromFile($uploadedFile, null, FileModule::STORAGE_FILE);
+        $file = $module->upload(new UploadOptions([
+            'source' => $uploadedFile,
+            'storageName' => FileModule::STORAGE_FILE,
+        ]));
 
         $this->assertTrue(file_exists($rootFilePath . DIRECTORY_SEPARATOR . $file->fileName));
     }
@@ -52,7 +57,6 @@ class FileTest extends TestCase
     {
         $module = FileModule::getInstance();
 
-        $fileName = 'beach.jpeg';
         $rootFilePath = dirname(__DIR__) . '/testData';
 
         $module->previews = [
@@ -76,12 +80,19 @@ class FileTest extends TestCase
             ]
         ];
 
-        $uploadedFile = new UploaderFile([
-            'name' => $fileName,
-            'source' => $rootFilePath . DIRECTORY_SEPARATOR . $fileName,
-        ]);
+        $this->expectException(FileUserException::class);
+        $module->upload(new UploadOptions([
+            'source' => $rootFilePath . DIRECTORY_SEPARATOR . 'text.txt',
+            'storageName' => FileModule::STORAGE_FILE,
+            'imagesOnly' => true,
+        ]));
 
-        $file = $module->uploadFromFile($uploadedFile, null, FileModule::STORAGE_FILE);
+        $this->expectException(null);
+        $file = $module->upload(new UploadOptions([
+            'source' => $rootFilePath . DIRECTORY_SEPARATOR . 'beach.jpeg',
+            'storageName' => FileModule::STORAGE_FILE,
+            'imagesOnly' => true,
+        ]));
 
         $this->assertTrue(file_exists($rootFilePath . DIRECTORY_SEPARATOR . $file->fileName));
     }
@@ -122,7 +133,10 @@ class FileTest extends TestCase
             'source' => $rootFilePath . DIRECTORY_SEPARATOR . $fileName,
         ]);
 
-        $file = $module->uploadFromFile($uploadedFile, null, FileModule::STORAGE_FILE);
+        $file = $module->upload(new UploadOptions([
+            'source' => $uploadedFile,
+            'storageName' => FileModule::STORAGE_FILE,
+        ]));
 
         $file->delete();
 

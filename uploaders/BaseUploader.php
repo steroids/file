@@ -29,7 +29,7 @@ abstract class BaseUploader extends BaseObject
     }
 
     /**
-     * @return UploaderFile[]
+     * @return UploaderFile
      */
     abstract public function upload();
 }
