@@ -205,14 +205,14 @@ class FileModule extends Module
     }
 
     /**
-     * @param UploadOptions|array|string|null $options
+     * @param UploadOptions|array|string $options
      * @return File
      * @throws FileUserException
      * @throws InvalidConfigException
      * @throws YiiBaseException
      * @throws exceptions\FileException
      */
-    public function upload($options = null)
+    public function upload($options = [])
     {
         // Normalize format
         if (is_string($options)) {
