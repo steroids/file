@@ -144,8 +144,11 @@ class FileModule extends Module
 
         $this->uploaders = ArrayHelper::merge(
             [
-                'put' => [
+                self::UPLOADER_PUT => [
                     'class' => PutUploader::class
+                ],
+                self::UPLOADER_POST => [
+                    'class' => PostUploader::class
                 ],
             ],
             $this->uploaders

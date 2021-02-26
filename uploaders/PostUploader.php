@@ -42,7 +42,7 @@ class PostUploader extends BaseUploader
             'uid' => ArrayHelper::getValue($_GET, 'uids.0') ?: ArrayHelper::getValue($_GET, 'uid'),
             'name' => $postFile['name'],
             'size' => $postFile['size'],
-            'mimeType' => $postFile['mimeType'],
+            'mimeType' => $postFile['type'],
             'source' => $postFile['tmp_name'],
             'rawData' => $postFile,
         ]);
