@@ -252,7 +252,11 @@ class FileModule extends Module
         // Auto detect source file size
         if (!$options->source->size) {
             if (is_string($options->source->source)) {
-                $options->source->size = filesize($options->source->source);
+                if (strpos($options->source->source, '://') !== false) {
+                    $options->source->size = $this->retrieveRemoteFileSize($options->source->source);
+                } else {
+                    $options->source->size = filesize($options->source->source);
+                }
             } elseif (is_resource($options->source->source)) {
                 $options->source->size = fstat($options->source->source)['size'];
             }
@@ -463,5 +467,20 @@ class FileModule extends Module
             ));
         }
         return $this->uploaders[$name];
+    }
+
+    protected function retrieveRemoteFileSize($url)
+    {
+        $ch = curl_init($url);
+
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+        curl_setopt($ch, CURLOPT_HEADER, TRUE);
+        curl_setopt($ch, CURLOPT_NOBODY, TRUE);
+
+        $data = curl_exec($ch);
+        $size = curl_getinfo($ch, CURLINFO_CONTENT_LENGTH_DOWNLOAD);
+
+        curl_close($ch);
+        return $size;
     }
 }
