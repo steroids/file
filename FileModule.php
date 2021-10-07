@@ -309,6 +309,16 @@ class FileModule extends Module
         }
 
         // Validate mime types
+        if(!$options->source->mimeType){
+            $imageType = exif_imagetype($options->source->source);
+            if(!$imageType){
+                throw new FileUserException(\Yii::t('steroids', 'Неверный формат файла'));
+            }
+
+            $options->source->mimeType = image_type_to_mime_type($imageType);
+            $options->source->name = md5($options->source->name) . image_type_to_extension($imageType);
+        }
+
         if (!empty($options->mimeTypes) && $options->source->mimeType
             && !in_array($options->source->mimeType, $options->mimeTypes)
         ) {
