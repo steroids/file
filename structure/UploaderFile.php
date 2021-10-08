@@ -77,6 +77,27 @@ class UploaderFile extends BaseObject
     public function getSavedFileName()
     {
         $ext = pathinfo($this->getTitle(), PATHINFO_EXTENSION);
-        return $this->uid . ($ext ? '.' . $ext : '');
+
+        if (!empty($ext)) {
+            $ext = '.' . $ext;
+        } else {
+            $ext = $this->getExtentionBySource($this->source);
+        }
+
+        return $this->uid . $ext;
+    }
+
+    /**
+     * @param string $source
+     * @return false|string
+     */
+    private function getExtentionBySource($source)
+    {
+        $imageType = exif_imagetype($source);
+        if (!$imageType) {
+            throw new FileUserException(\Yii::t('steroids', 'Не удалось установить тип файла'));
+        }
+
+        return image_type_to_extension($imageType);
     }
 }
