@@ -244,7 +244,6 @@ class FileModule extends Module
         // Source as path to file
         if (is_string($options->source) || is_resource($options->source)) {
             $options->source = new UploaderFile([
-                'isImage' => $options->imagesOnly,
                 'source' => $options->source,
                 'name' => is_string($options->source)
                     ? preg_replace('/[^A-Za-zА-Яа-я0-9\s_.-]/', '', StringHelper::basename($options->source))

@@ -5,6 +5,8 @@ namespace steroids\file\structure;
 use steroids\core\behaviors\UidBehavior;
 use steroids\file\exceptions\FileUserException;
 use yii\base\BaseObject;
+use yii\helpers\ArrayHelper;
+use yii\helpers\FileHelper;
 use yii\helpers\StringHelper;
 
 /**
@@ -54,12 +56,6 @@ class UploaderFile extends BaseObject
      */
     public $rawData;
 
-    /**
-     * @var bool
-     */
-    public $isImage;
-
-
     public function getUid()
     {
         if (!$this->_uid) {
@@ -84,29 +80,30 @@ class UploaderFile extends BaseObject
     public function getSavedFileName()
     {
         $ext = pathinfo($this->getTitle(), PATHINFO_EXTENSION);
-
         if (empty($ext)) {
-            if (!$this->isImage) {
-                throw new FileUserException(\Yii::t('steroids', 'Не удалось установить тип файла'));
-            }
-
-            $ext = $this->getImageExtensionBySource($this->source);
+            $ext = $this->getRemoteMimeType($this->source);
         }
 
-        return $this->uid . $ext;
+        return $this->uid . '.' . $ext;
     }
 
     /**
-     * @param string $source
-     * @return false|string
+     * @param string $url
+     * @return string
+     * @throws FileUserException
      */
-    private function getImageExtensionBySource($source)
+    public function getRemoteMimeType($url)
     {
-        $imageType = exif_imagetype($source);
-        if (!$imageType) {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_exec($ch);
+
+        $ext = FileHelper::getExtensionsByMimeType(curl_getinfo($ch, CURLINFO_CONTENT_TYPE));
+        if (empty($ext)) {
             throw new FileUserException(\Yii::t('steroids', 'Не удалось установить тип файла'));
         }
 
-        return image_type_to_extension($imageType);
+        //@todo может стоит как-то выбирать из массива а не брать первый элемент?
+        return ArrayHelper::getValue($ext, 0);
     }
 }
