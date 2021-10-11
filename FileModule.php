@@ -2,24 +2,24 @@
 
 namespace steroids\file;
 
+use Exception;
+use steroids\core\base\Module;
 use steroids\file\events\UploadAfterEvent;
 use steroids\file\events\UploadEvent;
-use Yii;
-use Exception;
+use steroids\file\exceptions\FileUserException;
+use steroids\file\models\File;
 use steroids\file\models\FileImage;
 use steroids\file\previews\ImageFitWithCrop;
 use steroids\file\previews\ImageResize;
-use steroids\file\structure\UploadOptions;
-use steroids\file\exceptions\FileUserException;
 use steroids\file\storages\AwsStorage;
-use steroids\file\storages\FileStorage;
-use steroids\core\base\Module;
-use steroids\file\models\File;
-use steroids\file\structure\UploaderFile;
 use steroids\file\storages\BaseStorage;
+use steroids\file\storages\FileStorage;
+use steroids\file\structure\UploaderFile;
+use steroids\file\structure\UploadOptions;
 use steroids\file\uploaders\BaseUploader;
 use steroids\file\uploaders\PostUploader;
 use steroids\file\uploaders\PutUploader;
+use Yii;
 use yii\base\Exception as YiiBaseException;
 use yii\base\InvalidConfigException;
 use yii\helpers\ArrayHelper;
@@ -244,6 +244,7 @@ class FileModule extends Module
         // Source as path to file
         if (is_string($options->source) || is_resource($options->source)) {
             $options->source = new UploaderFile([
+                'isImage' => $options->imagesOnly,
                 'source' => $options->source,
                 'name' => is_string($options->source)
                     ? preg_replace('/[^A-Za-zА-Яа-я0-9\s_.-]/', '', StringHelper::basename($options->source))

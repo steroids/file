@@ -3,6 +3,7 @@
 namespace steroids\file\structure;
 
 use steroids\core\behaviors\UidBehavior;
+use steroids\file\exceptions\FileUserException;
 use yii\base\BaseObject;
 use yii\helpers\StringHelper;
 
@@ -53,6 +54,12 @@ class UploaderFile extends BaseObject
      */
     public $rawData;
 
+    /**
+     * @var bool
+     */
+    public $isImage;
+
+
     public function getUid()
     {
         if (!$this->_uid) {
@@ -78,10 +85,12 @@ class UploaderFile extends BaseObject
     {
         $ext = pathinfo($this->getTitle(), PATHINFO_EXTENSION);
 
-        if (!empty($ext)) {
-            $ext = '.' . $ext;
-        } else {
-            $ext = $this->getExtentionBySource($this->source);
+        if (empty($ext)) {
+            if (!$this->isImage) {
+                throw new FileUserException(\Yii::t('steroids', 'Не удалось установить тип файла'));
+            }
+
+            $ext = $this->getImageExtensionBySource($this->source);
         }
 
         return $this->uid . $ext;
@@ -91,7 +100,7 @@ class UploaderFile extends BaseObject
      * @param string $source
      * @return false|string
      */
-    private function getExtentionBySource($source)
+    private function getImageExtensionBySource($source)
     {
         $imageType = exif_imagetype($source);
         if (!$imageType) {
