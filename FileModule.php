@@ -135,6 +135,15 @@ class FileModule extends Module
      */
     public array $classesMap = [];
 
+    public static function getExtensionByMimeType($mimeType)
+    {
+        return ArrayHelper::getValue([
+            'image/jpeg' => 'jpg',
+            'image/svg+xml' => 'svg',
+            'image/tiff' => 'tif'
+        ], $mimeType);
+    }
+
     /**
      * @inheritDoc
      */

@@ -4,10 +4,10 @@ namespace steroids\file\structure;
 
 use steroids\core\behaviors\UidBehavior;
 use steroids\file\exceptions\FileUserException;
+use steroids\file\FileModule;
 use yii\base\BaseObject;
 use yii\helpers\ArrayHelper;
 use yii\helpers\FileHelper;
-use yii\helpers\StringHelper;
 
 /**
  * Class UploaderFile
@@ -69,14 +69,6 @@ class UploaderFile extends BaseObject
         $this->_uid = $value;
     }
 
-    /**
-     * @return string|null
-     */
-    public function getTitle()
-    {
-        return $this->name ?: (is_string($this->source) ? StringHelper::basename($this->source) : $this->uid);
-    }
-
     public function getSavedFileName()
     {
         $ext = pathinfo($this->getTitle(), PATHINFO_EXTENSION);
@@ -98,12 +90,22 @@ class UploaderFile extends BaseObject
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_exec($ch);
 
-        $ext = FileHelper::getExtensionsByMimeType(curl_getinfo($ch, CURLINFO_CONTENT_TYPE));
-        if (empty($ext)) {
+        $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+
+        if (!$contentType) {
+            throw new FileUserException(\Yii::t('steroids', 'Не удалось получить content type'));
+        }
+
+        $ext = FileModule::getExtensionByMimeType($contentType);
+
+        if (!$ext) {
+            $ext = ArrayHelper::getValue(FileHelper::getExtensionsByMimeType('image/png'), 0);
+        }
+
+        if (!$ext) {
             throw new FileUserException(\Yii::t('steroids', 'Не удалось установить тип файла'));
         }
 
-        //@todo может стоит как-то выбирать из массива а не брать первый элемент?
-        return ArrayHelper::getValue($ext, 0);
+        return $ext;
     }
 }
