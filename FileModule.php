@@ -89,6 +89,15 @@ class FileModule extends Module
     ];
 
     /**
+     * @var array
+     */
+    public const MIMETYPE_EXTENSION_MAP = [
+        'image/jpeg' => 'jpg',
+        'image/svg+xml' => 'svg',
+        'image/tiff' => 'tif'
+    ];
+
+    /**
      * Format is jpg or png
      * @var string
      */
@@ -134,15 +143,6 @@ class FileModule extends Module
      * @var array
      */
     public array $classesMap = [];
-
-    public static function getExtensionByMimeType($mimeType)
-    {
-        return ArrayHelper::getValue([
-            'image/jpeg' => 'jpg',
-            'image/svg+xml' => 'svg',
-            'image/tiff' => 'tif'
-        ], $mimeType);
-    }
 
     /**
      * @inheritDoc

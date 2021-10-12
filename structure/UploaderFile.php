@@ -8,6 +8,7 @@ use steroids\file\FileModule;
 use yii\base\BaseObject;
 use yii\helpers\ArrayHelper;
 use yii\helpers\FileHelper;
+use yii\helpers\StringHelper;
 
 /**
  * Class UploaderFile
@@ -69,14 +70,52 @@ class UploaderFile extends BaseObject
         $this->_uid = $value;
     }
 
+    /**
+     * @return string|null
+     */
+    public function getTitle()
+    {
+        return $this->name ?: (is_string($this->source) ? StringHelper::basename($this->source) : $this->uid);
+    }
+
     public function getSavedFileName()
     {
-        $ext = pathinfo($this->getTitle(), PATHINFO_EXTENSION);
-        if (empty($ext)) {
-            $ext = $this->getRemoteMimeType($this->source);
+        $ext = $this->getExtensionBySource($this->source);
+
+        if (!$ext) {
+            throw new FileUserException(\Yii::t('steroids', 'Не удалось установить тип файла'));
         }
 
         return $this->uid . '.' . $ext;
+    }
+
+    /**
+     * @param string|resource $source
+     * @return string|bool
+     * @throws FileUserException
+     */
+    protected function getExtensionBySource($source)
+    {
+        if (is_resource($source)) {
+            $mimeType = mime_content_type($source);
+            if (!$mimeType) {
+                throw new FileUserException(\Yii::t('steroids', 'Не удалось установить тип файла'));
+            }
+
+            return $this->getExtentionByMimeType($mimeType);
+        }
+
+        if (filter_var($source, FILTER_VALIDATE_URL)) {
+            $mimeType = $this->getMimeTypeByUrl($source);
+
+            return $this->getExtentionByMimeType($mimeType);
+        }
+
+        if (is_string($source)) {
+            return pathinfo($source, PATHINFO_EXTENSION);
+        }
+
+        return false;
     }
 
     /**
@@ -84,7 +123,7 @@ class UploaderFile extends BaseObject
      * @return string
      * @throws FileUserException
      */
-    public function getRemoteMimeType($url)
+    public function getMimeTypeByUrl($url)
     {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -93,13 +132,23 @@ class UploaderFile extends BaseObject
         $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
 
         if (!$contentType) {
-            throw new FileUserException(\Yii::t('steroids', 'Не удалось получить content type'));
+            throw new FileUserException(\Yii::t('steroids', 'Не удолось получить content type'));
         }
 
-        $ext = FileModule::getExtensionByMimeType($contentType);
+        return $contentType;
+    }
+
+    /**
+     * @param string $mimeType
+     * @return string
+     * @throws FileUserException
+     */
+    public function getExtentionByMimeType($mimeType)
+    {
+        $ext = ArrayHelper::getValue(FileModule::MIMETYPE_EXTENSION_MAP, $mimeType);
 
         if (!$ext) {
-            $ext = ArrayHelper::getValue(FileHelper::getExtensionsByMimeType('image/png'), 0);
+            $ext = ArrayHelper::getValue(FileHelper::getExtensionsByMimeType($mimeType), 0);
         }
 
         if (!$ext) {
