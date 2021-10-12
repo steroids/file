@@ -255,7 +255,7 @@ class FileModule extends Module
             $options->source = new UploaderFile([
                 'source' => $options->source,
                 'name' => is_string($options->source)
-                    ? preg_replace('/[^A-Za-zА-Яа-я0-9\s_.-]/', '', StringHelper::basename($options->source))
+                    ? preg_replace('/[^A-Za-zА-Яа-я0-9_.-]/', '', StringHelper::basename($options->source))
                     : null,
             ]);
         }
