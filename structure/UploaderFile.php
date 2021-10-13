@@ -80,7 +80,7 @@ class UploaderFile extends BaseObject
 
     public function getSavedFileName()
     {
-        $ext = $this->getExtensionBySource($this->source);
+        $ext = self::getExtensionBySource($this->source);
 
         if (!$ext) {
             throw new FileUserException(\Yii::t('steroids', 'Не удалось установить тип файла'));
@@ -94,25 +94,29 @@ class UploaderFile extends BaseObject
      * @return string|bool
      * @throws FileUserException
      */
-    protected function getExtensionBySource($source)
+    protected static function getExtensionBySource($source)
     {
+        if (is_string($source)) {
+            $ext = pathinfo($source, PATHINFO_EXTENSION);
+
+            if(!empty($ext)){
+                return $ext;
+            }
+        }
+
+        if(filter_var($source, FILTER_VALIDATE_URL)){
+            $mimeType = self::getMimeTypeByUrl($source);
+
+            return self::getExtentionByMimeType($mimeType);
+        }
+
         if (is_resource($source)) {
             $mimeType = mime_content_type($source);
             if (!$mimeType) {
                 throw new FileUserException(\Yii::t('steroids', 'Не удалось установить тип файла'));
             }
 
-            return $this->getExtentionByMimeType($mimeType);
-        }
-
-        if (filter_var($source, FILTER_VALIDATE_URL)) {
-            $mimeType = $this->getMimeTypeByUrl($source);
-
-            return $this->getExtentionByMimeType($mimeType);
-        }
-
-        if (is_string($source)) {
-            return pathinfo($source, PATHINFO_EXTENSION);
+            return self::getExtentionByMimeType($mimeType);
         }
 
         return false;
@@ -123,7 +127,7 @@ class UploaderFile extends BaseObject
      * @return string
      * @throws FileUserException
      */
-    public function getMimeTypeByUrl($url)
+    public static function getMimeTypeByUrl($url)
     {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -143,7 +147,7 @@ class UploaderFile extends BaseObject
      * @return string
      * @throws FileUserException
      */
-    public function getExtentionByMimeType($mimeType)
+    public static function getExtentionByMimeType($mimeType)
     {
         $ext = ArrayHelper::getValue(FileModule::MIMETYPE_EXTENSION_MAP, $mimeType);
 
