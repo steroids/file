@@ -99,15 +99,9 @@ class UploaderFile extends BaseObject
         if (is_string($source)) {
             $ext = pathinfo($source, PATHINFO_EXTENSION);
 
-            if(!empty($ext)){
+            if (!empty($ext)) {
                 return $ext;
             }
-        }
-
-        if(filter_var($source, FILTER_VALIDATE_URL)){
-            $mimeType = self::getMimeTypeByUrl($source);
-
-            return self::getExtentionByMimeType($mimeType);
         }
 
         if (is_resource($source)) {
@@ -115,6 +109,12 @@ class UploaderFile extends BaseObject
             if (!$mimeType) {
                 throw new FileUserException(\Yii::t('steroids', 'Не удалось установить тип файла'));
             }
+
+            return self::getExtentionByMimeType($mimeType);
+        }
+
+        if (filter_var($source, FILTER_VALIDATE_URL)) {
+            $mimeType = self::getMimeTypeByUrl($source);
 
             return self::getExtentionByMimeType($mimeType);
         }
