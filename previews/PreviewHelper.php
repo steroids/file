@@ -52,9 +52,12 @@ class PreviewHelper
                 $parameters->originalWidth, $parameters->originalHeight
             );
 
-        $bool && $extension === 'png' ?
-            imagepng($dst, $source) :
+        if ($bool && $extension === 'png') {
+            imagepng($dst, $source);
+        } else {
+            imageinterlace($dst, true);
             imagejpeg($dst, $source, $parameters->previewQuality);
+        }
 
         // Clean
         if ($src) {
