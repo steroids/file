@@ -228,7 +228,7 @@ class FileImage extends Model
         $previewUploaderFile->setUid($fileNameWithoutExtension);
 
         // Store
-        $this->storage->write($previewUploaderFile);
+        $this->storage->write($previewUploaderFile, $this->folder);
     }
 
     /**

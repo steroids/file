@@ -149,7 +149,7 @@ class FileStorage extends BaseStorage
     {
         return implode(DIRECTORY_SEPARATOR, array_filter([
             $root,
-            $file->folder !== DIRECTORY_SEPARATOR ? $file->folder : null,
+            $file->folder !== DIRECTORY_SEPARATOR ? FileHelper::normalizePath($file->folder) : null,
             $file->fileName
         ]));
     }
