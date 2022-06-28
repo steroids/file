@@ -82,6 +82,10 @@ class UploaderFile extends BaseObject
     {
         $ext = self::getExtensionBySource($this->source);
 
+        if (!$ext && $this->mimeType) {
+            $ext = self::getExtentionByMimeType($this->mimeType);
+        }
+
         if (!$ext) {
             throw new FileUserException(\Yii::t('steroids', 'Не удалось установить тип файла'));
         }
