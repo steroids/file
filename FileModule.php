@@ -93,6 +93,7 @@ class FileModule extends Module
      */
     public const MIMETYPE_EXTENSION_MAP = [
         'image/jpeg' => 'jpg',
+        'image/jpg' => 'jpg',
         'image/svg+xml' => 'svg',
         'image/tiff' => 'tif'
     ];
